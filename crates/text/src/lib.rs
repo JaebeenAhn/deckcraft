@@ -57,6 +57,25 @@ pub struct GlyphRun {
     /// Alpha of the fill (0–1).
     pub alpha: f64,
     pub gradient: Option<deckcraft_model::style::Gradient>,
+    /// Shadow and glow behind the glyphs (`a:rPr/a:effectLst`).
+    pub effects: Option<RunEffects>,
+}
+
+/// A text run's shadow and glow, colours resolved.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RunEffects {
+    pub shadow: Option<TextShadow>,
+    /// Glow colour (with its alpha) and radius in points.
+    pub glow: Option<(Rgba, f64)>,
+}
+
+/// An outer shadow: colour (with its alpha), blur radius and offset in points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextShadow {
+    pub color: Rgba,
+    pub blur: f64,
+    pub dx: f64,
+    pub dy: f64,
 }
 
 impl std::fmt::Debug for GlyphRun {
@@ -174,6 +193,7 @@ struct Style {
     outline: Option<(Rgba, f64)>,
     link: bool,
     gradient: Option<deckcraft_model::style::Gradient>,
+    effects: Option<RunEffects>,
     /// "Regular", "Bold"… for the slot and fallback faces.
     style_name: &'static str,
     /// BCP 47 language (`a:rPr/@lang`), for shaping.
@@ -245,7 +265,14 @@ fn make_style(ctx: &Ctx, r: &RunProps, scale: f64, prompt: Option<Rgba>) -> Styl
     let size = (r.size.unwrap_or(18.0) * scale).clamp(0.5, 4000.0);
     let (mut color, alpha, gradient) = match &r.fill {
         Some(Fill::Solid { color }) => (ctx.color(color, None), color.alpha(), None),
-        Some(Fill::Gradient(g)) => (g.stops.first().map(|s| ctx.color(&s.color, None)).unwrap_or(Rgba::BLACK), 1.0, Some(g.clone())),
+        Some(Fill::Gradient(g)) => {
+            // Colours resolved here (theme, colour map), so the renderer needs no colour scheme.
+            let mut g = g.clone();
+            for s in &mut g.stops {
+                s.color = deckcraft_model::ColorRef::rgb(ctx.color(&s.color, None));
+            }
+            (g.stops.first().map(|s| ctx.color(&s.color, None)).unwrap_or(Rgba::BLACK), 1.0, Some(g))
+        }
         Some(Fill::None) => (Rgba::TRANSPARENT, 0.0, None),
         _ => (resolve::text_color(ctx, r), 1.0, None),
     };
@@ -281,6 +308,7 @@ fn make_style(ctx: &Ctx, r: &RunProps, scale: f64, prompt: Option<Rgba>) -> Styl
         outline,
         link: r.link.is_some(),
         gradient,
+        effects: run_effects(ctx, r, scale),
         style_name: style_name(bold, italic),
         lang: r.lang.clone().filter(|l| !l.is_empty()),
         ea,
@@ -464,9 +492,7 @@ fn shape_para(ctx: &Ctx, shape: &Shape, body: &TextBody, pi: usize, scale: f64, 
                 st.baseline = 0.0;
                 // Symbol fonts (Wingdings) aren't available: map common private-use bullets.
                 let ch = map_symbol_bullet(char, props.bullet_font.as_deref());
-                if !st.face.covers(ch.chars().next().unwrap_or('•')) {
-                    st.face = db.face("Inter", "Regular");
-                }
+                bullet_face(db, &mut st, &ch);
                 Some((ch, st))
             }
             Some(Bullet::AutoNum { scheme, start_at }) => {
@@ -476,8 +502,10 @@ fn shape_para(ctx: &Ctx, shape: &Shape, body: &TextBody, pi: usize, scale: f64, 
                 }
                 rp.size = Some(lead.size.unwrap_or(18.0) * props.bullet_size.unwrap_or(1.0));
                 rp.underline = None;
-                let st = make_style(ctx, &rp, scale, opts.prompt_color);
-                Some((autonum(scheme, start_at.saturating_sub(1).saturating_add(number.unwrap_or(1))), st))
+                let mut st = make_style(ctx, &rp, scale, opts.prompt_color);
+                let label = autonum(scheme, start_at.saturating_sub(1).saturating_add(number.unwrap_or(1)));
+                bullet_face(db, &mut st, &label);
+                Some((label, st))
             }
             _ => None,
         }
@@ -485,8 +513,27 @@ fn shape_para(ctx: &Ctx, shape: &Shape, body: &TextBody, pi: usize, scale: f64, 
     ParaShaped { cells, styles, faces, props, lead_size, lead_face, bullet, level: para.level, rtl }
 }
 
+/// A face that draws the bullet `label` when the bullet's own can't (circled numbers ①, arrows
+/// and other symbols missing from the text font), by the usual fallback.
+fn bullet_face(db: &FontDb, st: &mut Style, label: &str) {
+    let chars: Vec<char> = label.chars().collect();
+    if !chars.is_empty() && !deckcraft_fonts::covers_cluster(&st.face, &chars) {
+        st.face = db.cascade(&chars, std::slice::from_ref(&st.face), st.style_name);
+    }
+}
+
 /// Shape a logical paragraph into cells: bidi levels, per-grapheme faces, items of one level,
 /// script, face and shaping style, each shaped with the whole paragraph as context.
+/// A run's outer shadow and glow (inner shadows aren't drawn on text), at the layout's `scale`.
+fn run_effects(ctx: &Ctx, r: &RunProps, scale: f64) -> Option<RunEffects> {
+    let shadow = r.shadow.as_ref().filter(|s| !s.inner).map(|s| {
+        let a = s.dir.to_radians();
+        TextShadow { color: ctx.color(&s.color, None), blur: s.blur.max(0.0) * scale, dx: a.cos() * s.dist * scale, dy: a.sin() * s.dist * scale }
+    });
+    let glow = r.glow.as_ref().filter(|g| g.radius > 0.0).map(|g| (ctx.color(&g.color, None), g.radius * scale));
+    (shadow.is_some() || glow.is_some()).then_some(RunEffects { shadow, glow })
+}
+
 fn shape_cells(ctx: &Ctx, text: &str, char_style: &[usize], styles: &[Style], faces: &mut Vec<Arc<FontFace>>, rtl: bool) -> Vec<Cell> {
     let db = FontDb::global();
     let chars: Vec<char> = text.chars().collect();
@@ -524,7 +571,9 @@ fn shape_cells(ctx: &Ctx, text: &str, char_style: &[usize], styles: &[Style], fa
         let (sc, slot) = scripts.get(a).copied().unwrap_or((None, FontSlot::Latin));
         // Spaces, digits and punctuation stay in the face of the text before them when it can
         // draw them, so a phrase isn't cut into items at every space.
-        let neutral = cluster.iter().all(|c| script::script_of(*c).is_none());
+        // Emoji, and pictographs asked to look like text (U+FE0E), pick their own face.
+        let neutral =
+            cluster.iter().all(|c| script::script_of(*c).is_none()) && !deckcraft_fonts::is_emoji_cluster(cluster) && !cluster.contains(&'\u{FE0E}');
         let face = match prev.as_ref() {
             Some(p) if neutral && deckcraft_fonts::covers_cluster(p, cluster) && char_style.get(a.wrapping_sub(1)) == Some(&si) => p.clone(),
             _ => {
@@ -566,6 +615,9 @@ fn shape_cells(ctx: &Ctx, text: &str, char_style: &[usize], styles: &[Style], fa
     cells
 }
 
+/// Size of superscript and subscript text relative to the run's size.
+const SUB_SUPER: f64 = 0.66;
+
 /// Shape cells `range` (one item) and hang each cluster's glyphs on its first cell, sharing the
 /// cluster's advance among its graphemes (by the ligature's GDEF carets when it has them).
 #[allow(clippy::too_many_arguments)]
@@ -593,7 +645,11 @@ fn shape_item(
         let st = styles.get(cell.style);
         let size = st.map(|s| s.size).unwrap_or(18.0);
         let small = st.is_some_and(|s| s.caps == Caps::Small) && cell.ch.is_lowercase();
-        (if small { size * 0.8 } else { size }) / upem
+        let size = if small { size * 0.8 } else { size };
+        // Superscript and subscript glyphs are drawn at two thirds of the size, so they advance by
+        // two thirds too.
+        let size = if st.is_some_and(|s| s.baseline != 0.0) { size * SUB_SUPER } else { size };
+        size / upem
     };
     // Cluster heads in this item, ascending; each cluster spans to the next head.
     let mut heads: Vec<usize> = glyphs.iter().filter_map(|g| char_at_byte.get(&g.cluster).copied()).filter(|h| range.contains(h)).collect();
@@ -679,7 +735,8 @@ fn map_symbol_bullet(c: &str, font: Option<&str>) -> String {
         };
         return m.to_string();
     }
-    c.to_string()
+    // PowerPoint draws only the first character of a longer `buChar` ("••" draws one dot).
+    c.graphemes(true).next().unwrap_or("•").to_string()
 }
 
 fn measure_str(face: &FontFace, size: f64, s: &str) -> (f64, Vec<(u32, f64)>) {
@@ -694,13 +751,60 @@ fn measure_str(face: &FontFace, size: f64, s: &str) -> (f64, Vec<(u32, f64)>) {
     (x, out)
 }
 
+/// Single line spacing as a multiple of the font size. PowerPoint spaces single-spaced lines 1.2
+/// times the size apart in every font (observed on twenty Latin, CJK, Thai and Indic fonts at 18
+/// and 40 pt), whatever the font's own ascent and descent.
+///
+/// Caveat: this was measured on one Windows install of desktop PowerPoint. It may be a Windows or
+/// machine setting; PowerPoint on macOS or the web may space lines by the font's own metrics.
+/// Keep it a single tunable value, and re-measure on the other platform before changing it.
+const LINE_PITCH: f64 = 1.2;
+
+/// A line's height above and below the baseline at `size`: [`LINE_PITCH`] × size, split where
+/// the font's Windows ascent and descent put the baseline.
 fn line_metrics(face: &FontFace, size: f64) -> (f64, f64) {
-    let k = size / face.upem.max(1.0);
-    (face.ascent * k, face.descent * k)
+    let h = size * LINE_PITCH;
+    (h * face.line_split, h * (1.0 - face.line_split))
 }
 
-/// Break opportunities: allowed[i] = a line may start at char i.
-fn break_opportunities(text: &str) -> (Vec<bool>, Vec<bool>) {
+/// Hangul syllables and jamo: PowerPoint wraps Korean at word boundaries (spaces), not between
+/// syllables.
+fn is_hangul(c: char) -> bool {
+    matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}')
+}
+
+/// Closing East Asian punctuation that may hang past the end of a line (`hangingPunct`).
+fn is_hanging_punct(c: char) -> bool {
+    matches!(
+        c,
+        '、' | '。'
+            | '，'
+            | '．'
+            | '：'
+            | '；'
+            | '！'
+            | '？'
+            | '）'
+            | '」'
+            | '』'
+            | '】'
+            | '〕'
+            | '〉'
+            | '》'
+            | '〙'
+            | '〛'
+            | '｝'
+            | '］'
+            | '｣'
+            | '､'
+            | '｡'
+    )
+}
+
+/// Break opportunities: allowed[i] = a line may start at char i. Unicode line breaking, then
+/// PowerPoint's differences: without `latinLnBrk` a word doesn't break after `/` or `\`, and
+/// Korean breaks only between words.
+fn break_opportunities(text: &str, latin_break: bool) -> (Vec<bool>, Vec<bool>) {
     let n = text.chars().count();
     let mut allowed = vec![false; n + 1];
     let mut mandatory = vec![false; n + 1];
@@ -719,6 +823,17 @@ fn break_opportunities(text: &str) -> (Vec<bool>, Vec<bool>) {
             {
                 *m = true;
             }
+        }
+    }
+    let chars: Vec<char> = text.chars().collect();
+    for (i, w) in chars.windows(2).enumerate() {
+        let (prev, next) = (w[0], w[1]);
+        let keep = if is_hangul(prev) && is_hangul(next) { false } else { latin_break || !matches!(prev, '/' | '\\') || next.is_whitespace() };
+        if !keep
+            && !mandatory.get(i + 1).copied().unwrap_or(false)
+            && let Some(a) = allowed.get_mut(i + 1)
+        {
+            *a = false;
         }
     }
     (allowed, mandatory)
@@ -742,7 +857,8 @@ fn break_lines(
     x0_rest: f64,
 ) -> Vec<RawLine> {
     let text: String = p.cells.iter().map(|c| c.ch).collect();
-    let (allowed, _) = break_opportunities(&text);
+    let (allowed, _) = break_opportunities(&text, p.props.latin_line_break.unwrap_or(false));
+    let hang = p.props.hanging_punct.unwrap_or(false);
     let n = p.cells.len();
     let mut lines = vec![];
     let mut start = 0;
@@ -768,6 +884,13 @@ fn break_lines(
             let breakable = |j: usize| p.cells.get(j).is_none_or(|c| c.breakable(j));
             if i > start && allowed.get(i).copied().unwrap_or(false) && breakable(i) {
                 last_break = Some(i);
+            }
+            // Closing East Asian punctuation hangs past the end instead of wrapping
+            // (`hangingPunct`); the line breaks after it.
+            if wrap && hang && x + adv > avail + 0.01 && x <= avail + 0.01 && is_hanging_punct(c) && i > start {
+                end = i + 1;
+                next = i + 1;
+                break;
             }
             if wrap && x + adv > avail + 0.01 && !c.is_whitespace() && i > start {
                 // Break at the last opportunity, or force mid-word (between clusters).
@@ -909,7 +1032,11 @@ fn layout_scaled(ctx: &Ctx, shape: &Shape, body: &TextBody, bp: &BodyProps, opts
         let bullet_w = p.bullet.as_ref().map(|(s, st)| measure_str(&st.face, st.size, s).0).unwrap_or(0.0);
         let first_x = if p.bullet.is_some() {
             let bx = (margin + indent).max(0.0);
-            if indent < 0.0 && bx + bullet_w <= margin { margin } else { bx + bullet_w + if indent >= 0.0 { 0.0 } else { 3.0 } }
+            // A hanging bullet's text starts at the margin. When the hang reaches left of the box
+            // (marL + indent < 0), PowerPoint pins the bullet to the box's edge and keeps the
+            // hang: the first line's text starts at -indent (later lines stay at the margin).
+            let stop = margin.max(-indent);
+            if indent < 0.0 && bx + bullet_w <= stop { stop } else { bx + bullet_w + if indent >= 0.0 { 0.0 } else { 3.0 } }
         } else {
             (margin + indent).max(0.0)
         };
@@ -1144,6 +1271,7 @@ fn layout_scaled(ctx: &Ctx, shape: &Shape, body: &TextBody, bp: &BodyProps, opts
                 link: false,
                 alpha: st.alpha,
                 gradient: None,
+                effects: None,
             });
         }
         // Group visually consecutive cells by (style, face).
@@ -1155,7 +1283,7 @@ fn layout_scaled(ctx: &Ctx, shape: &Shape, body: &TextBody, bp: &BodyProps, opts
             let Some(st) = p.styles.get(cell.style) else { continue };
             let Some(&(cx, cx1)) = line.edges.get(k) else { continue };
             let base_y = line.baseline - st.baseline * st.size;
-            let size = if st.baseline != 0.0 { st.size * 0.66 } else { st.size };
+            let size = if st.baseline != 0.0 { st.size * SUB_SUPER } else { st.size };
             let size = if st.caps == Caps::Small && cell.ch.is_lowercase() { size * 0.8 } else { size };
             let key = (cell.style, cell.face);
             if key != cur_key {
@@ -1177,6 +1305,7 @@ fn layout_scaled(ctx: &Ctx, shape: &Shape, body: &TextBody, bp: &BodyProps, opts
                     link: st.link,
                     alpha: st.alpha,
                     gradient: st.gradient.clone(),
+                    effects: st.effects,
                 });
                 cur_key = key;
             }
@@ -1204,9 +1333,8 @@ fn layout_scaled(ctx: &Ctx, shape: &Shape, body: &TextBody, bp: &BodyProps, opts
                             }
                         }
                     }
-                    let k66 = if st.baseline != 0.0 { 0.66 } else { 1.0 };
                     for (gid, gx, gy) in &cell.glyphs {
-                        r.glyphs.push((*gid, cl + kash + gx * k66, base_y + gy));
+                        r.glyphs.push((*gid, cl + kash + gx, base_y + gy));
                         r.cells.push((ci, cell.ch));
                     }
                 }

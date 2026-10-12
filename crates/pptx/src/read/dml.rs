@@ -77,6 +77,12 @@ pub fn fill_el(imp: &mut Imp, part: &Part, f: &El) -> Option<Fill> {
         "solidFill" => Fill::Solid { color: color(f).unwrap_or(ColorRef::rgb(Rgba::BLACK)) },
         "gradFill" => Fill::Gradient(gradient(f)),
         "blipFill" => match blip_fill(imp, part, f) {
+            // A picture filling a shape or background with neither `a:stretch` nor `a:tile` is
+            // tiled at its own size, as PowerPoint draws it.
+            Some(mut p) if f.child("stretch").is_none() && f.child("tile").is_none() => {
+                p.mode = PictureMode::Tile { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0, flip: "none".into(), align: "tl".into() };
+                Fill::Picture(p)
+            }
             Some(p) => Fill::Picture(p),
             None => Fill::None,
         },
@@ -339,6 +345,8 @@ pub fn ppr(imp: &mut Imp, part: &Part, p: &El) -> (Option<u8>, ParaProps, Option
         rtl: p.bool("rtl"),
         font_align: p.attr("fontAlgn").map(String::from),
         east_asian_line_break: p.bool("eaLnBrk"),
+        latin_line_break: p.bool("latinLnBrk"),
+        hanging_punct: p.bool("hangingPunct"),
         default_tab: pt(p, "defTabSz"),
         ..Default::default()
     };

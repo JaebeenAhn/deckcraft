@@ -13,7 +13,7 @@ mod fontdb;
 pub mod script;
 mod shape;
 
-pub use fallback::{bundled_families, covers_cluster, ligature_carets};
+pub use fallback::{bundled_families, covers_cluster, is_emoji_cluster, ligature_carets};
 pub use fontdb::{FALLBACK_FAMILY, FaceRef, FontDb, FontFace, LAST_RESORT_FAMILY, base_style, bundled, substitutes, system_font_dirs};
 pub use harfrust::Feature;
 use harfrust::Tag;
@@ -137,10 +137,40 @@ mod tests {
     }
 
     #[test]
+    fn emoji_clusters_are_recognised() {
+        let c = |s: &str| s.chars().collect::<Vec<char>>();
+        for yes in ["😀", "👍🏽", "❤\u{FE0F}", "👨\u{200D}👩\u{200D}👧", "🇯🇵", "1\u{FE0F}\u{20E3}", "🏳\u{FE0F}\u{200D}🌈"] {
+            assert!(is_emoji_cluster(&c(yes)), "{yes:?}");
+        }
+        for no in ["a", "1", "❤", "☺\u{FE0E}", "😀\u{FE0E}", "字", "→"] {
+            assert!(!is_emoji_cluster(&c(no)), "{no:?}");
+        }
+    }
+
+    #[test]
+    fn colour_fonts_are_recognised() {
+        let db = FontDb::with_font_dirs(Vec::new());
+        assert!(db.add_font(include_bytes!("../../render/tests/fixtures/colr-squares.ttf").to_vec()) > 0);
+        assert!(db.face("DeckCraft Colr Squares", "Regular").is_color());
+        assert!(!fontdb::last_resort_face().is_color());
+    }
+
+    #[test]
     fn last_resort_face_parses() {
         let f = fontdb::last_resort_face();
         assert_eq!(f.family, fontdb::LAST_RESORT_FAMILY);
         assert!(f.upem > 0.0);
+    }
+
+    #[test]
+    fn line_split_follows_the_windows_ascent_and_descent() {
+        use skrifa::raw::TableProvider;
+        let f = fontdb::last_resort_face();
+        let font = skrifa::FontRef::new(f.data()).unwrap();
+        let os2 = font.os2().unwrap();
+        let (a, d) = (os2.us_win_ascent() as f64, os2.us_win_descent() as f64);
+        assert!((f.line_split - a / (a + d)).abs() < 1e-9, "{} vs {}", f.line_split, a / (a + d));
+        assert!(f.line_split > 0.5 && f.line_split < 1.0);
     }
 
     #[test]

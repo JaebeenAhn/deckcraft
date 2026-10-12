@@ -3,7 +3,7 @@
 use deckcraft_color::Rgba;
 use deckcraft_geom::preset::FillMode;
 use deckcraft_model::resolve::Ctx;
-use deckcraft_model::style::{Fill, GradientShape, PictureFill, PictureMode};
+use deckcraft_model::style::{ColorRef, Fill, GradientShape, PictureFill, PictureMode};
 use deckcraft_model::{PhType, Presentation};
 use kurbo::{Affine, BezPath, Point, Rect, Shape as _};
 use vello_cpu::{RenderContext, peniko};
@@ -35,37 +35,13 @@ pub fn fill_path(
             if g.stops.is_empty() {
                 return;
             }
-            let mut stops: Vec<(f32, peniko::Color)> =
-                g.stops.iter().map(|s| (s.pos.clamp(0.0, 1.0) as f32, color(shade(rctx.color(&s.color, ph), mode), alpha))).collect();
-            stops.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let stops: Vec<peniko::ColorStop> = stops.into_iter().map(|(o, c)| peniko::ColorStop { offset: o, color: c.into() }).collect();
-            let grad = match &g.shape {
-                GradientShape::Linear { angle, .. } => {
-                    // Angle measured clockwise from left→right; span the bounds along that direction.
-                    let a = angle.to_radians();
-                    let (dx, dy) = (a.cos(), a.sin());
-                    let c = bounds.center();
-                    let half = (bounds.width() * dx.abs() + bounds.height() * dy.abs()) / 2.0;
-                    peniko::Gradient::new_linear(Point::new(c.x - dx * half, c.y - dy * half), Point::new(c.x + dx * half, c.y + dy * half))
-                        .with_stops(stops.as_slice())
-                }
-                GradientShape::Path { focus, .. } => {
-                    let fx = bounds.x0 + bounds.width() * (focus[0] + (1.0 - focus[2])) / 2.0;
-                    let fy = bounds.y0 + bounds.height() * (focus[1] + (1.0 - focus[3])) / 2.0;
-                    // Reach the farthest corner, so a gradient from a corner covers the whole box.
-                    let r = [(bounds.x0, bounds.y0), (bounds.x1, bounds.y0), (bounds.x0, bounds.y1), (bounds.x1, bounds.y1)]
-                        .iter()
-                        .map(|(x, y)| ((x - fx).powi(2) + (y - fy).powi(2)).sqrt())
-                        .fold(1e-6, f64::max);
-                    peniko::Gradient::new_radial(Point::new(fx, fy), r as f32).with_stops(stops.as_slice())
-                }
-            };
-            ctx.set_paint(grad);
+            let stops: Vec<(f64, Rgba)> = g.stops.iter().map(|s| (s.pos, shade(rctx.color(&s.color, ph), mode))).collect();
+            ctx.set_paint(gradient(&g.shape, stops, bounds, alpha));
             ctx.fill_path(path);
         }
         Fill::Picture(pf) => {
             ctx.push_clip_layer(path);
-            picture(ctx, pres, pf, bounds, m, None);
+            picture(ctx, pres, &resolved(rctx, pf, ph), bounds, m, None);
             ctx.pop_layer();
         }
         Fill::Pattern(p) => {
@@ -119,6 +95,48 @@ fn p_rect(x: f64, y: f64, w: f64, h: f64) -> BezPath {
     Rect::new(x, y, x + w, y + h).to_path(0.1)
 }
 fn p_add(_a: &mut BezPath, _b: &mut BezPath) {}
+
+/// `pf` with its duotone colours resolved to plain RGB against the slide's colours and the
+/// placeholder colour `ph` (theme background pictures recolour with `phClr`), so the decoded-image
+/// cache can apply and key them without a colour scheme.
+pub fn resolved<'a>(rctx: &Ctx, pf: &'a PictureFill, ph: Option<Rgba>) -> std::borrow::Cow<'a, PictureFill> {
+    let Some((d, l)) = &pf.adjust.duotone else { return std::borrow::Cow::Borrowed(pf) };
+    let mut out = pf.clone();
+    out.adjust.duotone = Some((ColorRef::rgb(rctx.color(d, ph)), ColorRef::rgb(rctx.color(l, ph))));
+    std::borrow::Cow::Owned(out)
+}
+
+/// The paint of a gradient of `shape` with `stops` (position, colour) spanning `bounds`, faded
+/// by `alpha`, ramping between stops as PowerPoint does (see `ramp`).
+pub fn gradient(shape: &GradientShape, mut stops: Vec<(f64, Rgba)>, bounds: Rect, alpha: f64) -> peniko::Gradient {
+    for s in &mut stops {
+        s.0 = s.0.clamp(0.0, 1.0);
+    }
+    stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let stops: Vec<peniko::ColorStop> =
+        crate::ramp::expand(&stops).into_iter().map(|(o, c)| peniko::ColorStop { offset: o as f32, color: color(c, alpha).into() }).collect();
+    match shape {
+        GradientShape::Linear { angle, .. } => {
+            // Angle measured clockwise from left→right; span the bounds along that direction.
+            let a = angle.to_radians();
+            let (dx, dy) = (a.cos(), a.sin());
+            let c = bounds.center();
+            let half = (bounds.width() * dx.abs() + bounds.height() * dy.abs()) / 2.0;
+            peniko::Gradient::new_linear(Point::new(c.x - dx * half, c.y - dy * half), Point::new(c.x + dx * half, c.y + dy * half))
+                .with_stops(stops.as_slice())
+        }
+        GradientShape::Path { focus, .. } => {
+            let fx = bounds.x0 + bounds.width() * (focus[0] + (1.0 - focus[2])) / 2.0;
+            let fy = bounds.y0 + bounds.height() * (focus[1] + (1.0 - focus[3])) / 2.0;
+            // Reach the farthest corner, so a gradient from a corner covers the whole box.
+            let r = [(bounds.x0, bounds.y0), (bounds.x1, bounds.y0), (bounds.x0, bounds.y1), (bounds.x1, bounds.y1)]
+                .iter()
+                .map(|(x, y)| ((x - fx).powi(2) + (y - fy).powi(2)).sqrt())
+                .fold(1e-6, f64::max);
+            peniko::Gradient::new_radial(Point::new(fx, fy), r as f32).with_stops(stops.as_slice())
+        }
+    }
+}
 
 /// Draw a picture fill into `bounds` (shape-local) honouring crop and stretch/tile modes; an animated
 /// GIF shows its frame at `gif_time` seconds.

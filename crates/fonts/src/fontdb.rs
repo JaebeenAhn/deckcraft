@@ -79,6 +79,10 @@ pub struct FontFace {
     /// values).
     pub cap_height: f64,
     pub x_height: f64,
+    /// Where the baseline sits in a line, as a share of the line's height from its top: the
+    /// Windows ascent over the Windows ascent plus descent (OS/2 `usWinAscent`/`usWinDescent`),
+    /// the split PowerPoint uses (computed by `line_split`).
+    pub line_split: f64,
     pub shaper: harfrust::ShaperData,
     /// Variable fonts: the named instance's axis settings (user units; empty = default instance),
     /// the normalised location and the shaper's view of it.
@@ -87,6 +91,8 @@ pub struct FontFace {
     pub instance: Option<harfrust::ShaperInstance>,
     /// Basic Multilingual Plane coverage bitset, built on first use.
     bmp: std::sync::OnceLock<Box<[u64]>>,
+    /// Colour glyph tables present (`is_color`), looked up on first use.
+    color: std::sync::OnceLock<bool>,
 }
 
 /// A cheap `Copy` handle to a face. Faces are never unloaded, so the handle lives for the rest of
@@ -153,6 +159,11 @@ impl FontFace {
     }
     pub fn skrifa(&self) -> Option<skrifa::FontRef<'_>> {
         skrifa::FontRef::from_index(self.data(), self.index).ok()
+    }
+    /// Does the face draw colour glyphs (a `COLR`, `CBDT`, `sbix` or `SVG ` table, as colour emoji
+    /// fonts have)?
+    pub fn is_color(&self) -> bool {
+        *self.color.get_or_init(|| has_color_tables(self.data(), self.index))
     }
     pub fn hb(&self) -> Option<harfrust::FontRef<'_>> {
         harfrust::FontRef::from_index(self.data(), self.index).ok()
@@ -252,6 +263,13 @@ pub struct FontDb {
 struct SysFallback {
     enabled: bool,
     misses: std::collections::HashSet<char>,
+}
+
+/// Does face `index` of `data` carry colour glyph tables?
+fn has_color_tables(data: &[u8], index: u32) -> bool {
+    use skrifa::raw::types::Tag;
+    let Ok(f) = skrifa::FontRef::from_index(data, index) else { return false };
+    [b"COLR", b"CBDT", b"sbix", b"SVG "].iter().any(|t| f.table_data(Tag::new(t)).is_some())
 }
 
 /// Families tried (when installed) for characters the loaded fonts lack: CJK, symbols, emoji.
@@ -436,6 +454,23 @@ pub(crate) fn last_resort_face() -> Arc<FontFace> {
     .clone()
 }
 
+/// The share of a line above the baseline (`FontFace::line_split`): OS/2 `usWinAscent` over
+/// `usWinAscent + usWinDescent`, else the ascent over ascent plus descent. Fonts whose Windows
+/// extent is huge (Gabriola, Cambria Math: over 1.5 em) get 0.81, where PowerPoint puts their
+/// baseline (observed).
+fn line_split(f: &skrifa::FontRef, ascent: f64, descent: f64, upem: f64) -> f64 {
+    use skrifa::raw::TableProvider;
+    let (a, d) = match f.os2() {
+        Ok(os2) if os2.us_win_ascent() > 0 => (os2.us_win_ascent() as f64, os2.us_win_descent() as f64),
+        _ => (ascent, descent),
+    };
+    let total = a + d;
+    if !total.is_finite() || total <= 0.0 || a < 0.0 || d < 0.0 {
+        return 0.8;
+    }
+    if total > upem * 1.5 { 0.81 } else { (a / total).clamp(0.5, 1.0) }
+}
+
 fn make_face(bytes: FontBytes, index: u32, family: String, style: String, coords: Vec<([u8; 4], f32)>) -> Option<FontFace> {
     let data: &[u8] = match &bytes {
         FontBytes::Static(b) => b,
@@ -467,6 +502,7 @@ fn make_face(bytes: FontBytes, index: u32, family: String, style: String, coords
         descent: -(m.descent as f64),
         cap_height: m.cap_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.72),
         x_height: m.x_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.5),
+        line_split: line_split(&f, m.ascent as f64, -(m.descent as f64), m.units_per_em.max(1) as f64),
         shaper,
         coords,
         location,
@@ -474,6 +510,7 @@ fn make_face(bytes: FontBytes, index: u32, family: String, style: String, coords
         bytes,
         index,
         bmp: std::sync::OnceLock::new(),
+        color: std::sync::OnceLock::new(),
     })
 }
 
@@ -877,6 +914,61 @@ impl FontDb {
             }
         }
         self.sys.lock().unwrap_or_else(|e| e.into_inner()).misses.insert(c);
+        false
+    }
+
+    /// A loaded colour face drawing all of `cluster`, loading an installed colour font that covers
+    /// `key` if none is loaded yet. Misses are remembered.
+    pub(crate) fn color_face_for(&self, key: char, cluster: &[char]) -> Option<Arc<FontFace>> {
+        let pick = |db: &FontDb| {
+            let faces = db.read_faces();
+            let mut v: Vec<&Arc<FontFace>> = faces.iter().filter(|f| crate::covers_cluster(f, cluster) && f.is_color()).collect();
+            v.sort_by_key(|f| (f.italic, (f.weight - 400.0).abs() as i32));
+            v.first().map(|f| (*f).clone())
+        };
+        if let Some(f) = pick(self) {
+            return Some(f);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.system_color_fallback(key) {
+            return pick(self);
+        }
+        let _ = key;
+        None
+    }
+
+    /// Load an installed colour font covering `c`. True if one was loaded.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn system_color_fallback(&self, c: char) -> bool {
+        static MISSES: Mutex<Option<std::collections::HashSet<char>>> = Mutex::new(None);
+        if c.is_control() || c.is_whitespace() {
+            return false;
+        }
+        {
+            let sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            if !sys.enabled {
+                return false;
+            }
+        }
+        if MISSES.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).contains(&c) {
+            return false;
+        }
+        let mut paths: Vec<std::path::PathBuf> = self.read_catalog().iter().map(|e| e.path.clone()).collect();
+        paths.sort();
+        paths.dedup();
+        for p in paths {
+            if std::fs::metadata(&p).map(|m| m.len() > 64 << 20).unwrap_or(true) {
+                continue;
+            }
+            let Ok(data) = std::fs::read(&p) else { continue };
+            let hit = enumerate_faces(&data).iter().any(|(i, _, _, _)| {
+                has_color_tables(&data, *i) && skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some())
+            });
+            if hit && self.add_font(data) > 0 {
+                return true;
+            }
+        }
+        MISSES.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).insert(c);
         false
     }
 

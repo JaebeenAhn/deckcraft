@@ -29,6 +29,8 @@ deck and UI icons are original work of the DeckCraft contributors (drawn or gene
 | `crates/media/tests/fixtures/make.sh` | DeckCraft contributors | this repository | MIT OR Apache-2.0 | Regenerates the media fixtures |
 | `crates/ui-egui/src/i18n/uk.tsv` | @dmatviichuk, assisted by Codex | Contributor-original Ukrainian translation in this repository; terminology checked against VESUM 6.8.6 and ULIF (validation tools/data are not bundled) | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | Ukrainian interface text |
 | `crates/ui-egui/src/i18n/pl.tsv` | @brzuchal, assisted by Claude | Contributor-original Polish translation written from the English interface labels in this repository; no other product localisation copied | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | Polish interface text |
+| `crates/render/tests/fixtures/colr-squares.ttf` | DeckCraft contributors | two squares as a COLRv0/CPAL test font, built by `make_colr_font.py` (fontTools as the builder only) | CC0-1.0 | Colour glyph rendering tests |
+| `crates/render/tests/fixtures/make_colr_font.py` | DeckCraft contributors | this repository | MIT OR Apache-2.0 | Regenerates the COLR test font |
 
 ## Bundled through dependencies
 

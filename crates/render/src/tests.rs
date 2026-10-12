@@ -545,3 +545,230 @@ fn interface_placeholder_prompts_preserve_custom_prompts_and_document_data() {
     let c = Ctx::for_slide(&p, slide).unwrap();
     assert_eq!(prompt_body(&c, shape, PhType::Title, Some("Натисніть, щоб додати заголовок")).text(), "Click to add title");
 }
+
+#[test]
+fn a_linear_gradient_ramps_like_powerpoint() {
+    // Black to white, left to right: PowerPoint draws 105 a quarter of the way and 186 half way
+    // (linear-light mix, S-shaped), not 64 and 128.
+    use deckcraft_model::style::{Fill, Gradient, GradientShape, GradientStop};
+    let stop = |pos, c| GradientStop { pos, color: ColorRef::rgb(c) };
+    let sh = Shape {
+        id: ShapeId(700),
+        xfrm: Some(Xfrm::new(0.0, 0.0, 800.0, 100.0)),
+        fill: Some(Fill::Gradient(Gradient {
+            stops: vec![stop(0.0, deckcraft_color::Rgba::rgb(0, 0, 0)), stop(1.0, deckcraft_color::Rgba::rgb(255, 255, 255))],
+            shape: GradientShape::Linear { angle: 0.0, scaled: false },
+            rotate_with_shape: true,
+        })),
+        line: Some(deckcraft_model::style::Line { fill: Some(Fill::None), ..Default::default() }),
+        ..Default::default()
+    };
+    let p = deck_with(vec![sh]);
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    for (x, want) in [(200, 105), (400, 186), (600, 238)] {
+        let got = img.pixel(x, 50)[0] as i32;
+        assert!((got - want).abs() <= 4, "x {x}: {got} vs {want}");
+    }
+}
+
+#[test]
+fn a_gradient_with_a_stop_off_the_end_stays_linear() {
+    // Stops at 20 % and 100 %: PowerPoint blends linearly in sRGB (96 at 50 %, 175 at 75 %).
+    use deckcraft_model::style::{Fill, Gradient, GradientShape, GradientStop};
+    let stop = |pos, c| GradientStop { pos, color: ColorRef::rgb(c) };
+    let sh = Shape {
+        id: ShapeId(701),
+        xfrm: Some(Xfrm::new(0.0, 0.0, 800.0, 100.0)),
+        fill: Some(Fill::Gradient(Gradient {
+            stops: vec![stop(0.2, deckcraft_color::Rgba::rgb(0, 0, 0)), stop(1.0, deckcraft_color::Rgba::rgb(255, 255, 255))],
+            shape: GradientShape::Linear { angle: 0.0, scaled: false },
+            rotate_with_shape: true,
+        })),
+        line: Some(deckcraft_model::style::Line { fill: Some(Fill::None), ..Default::default() }),
+        ..Default::default()
+    };
+    let p = deck_with(vec![sh]);
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    for (x, want) in [(400, 96), (600, 175)] {
+        let got = img.pixel(x, 50)[0] as i32;
+        assert!((got - want).abs() <= 4, "x {x}: {got} vs {want}");
+    }
+}
+
+#[test]
+fn a_shape_filled_with_the_background_shows_the_slide_background() {
+    // `useBgFill`: PowerPoint paints the slide's background into the shape, laid out on the
+    // slide. A white panel covers a black-to-grey background; a shape on it with the background
+    // fill is a window onto that background.
+    use deckcraft_model::style::{Fill, Gradient, GradientShape, GradientStop};
+    let none = || Some(deckcraft_model::style::Line { fill: Some(Fill::None), ..Default::default() });
+    let panel = Shape {
+        id: ShapeId(710),
+        xfrm: Some(Xfrm::new(0.0, 0.0, 960.0, 540.0)),
+        fill: Some(Fill::solid(ColorRef::rgb(deckcraft_color::Rgba::rgb(255, 255, 255)))),
+        line: none(),
+        ..Default::default()
+    };
+    let window = Shape {
+        id: ShapeId(711),
+        xfrm: Some(Xfrm::new(100.0, 100.0, 760.0, 340.0)),
+        fill: Some(Fill::Background),
+        line: none(),
+        ..Default::default()
+    };
+    let mut p = deck_with(vec![panel, window]);
+    let stop = |pos, v| GradientStop { pos, color: ColorRef::rgb(deckcraft_color::Rgba::rgb(v, v, v)) };
+    std::sync::Arc::make_mut(&mut p.slides[0]).background = Some(deckcraft_model::Background::Fill {
+        fill: Fill::Gradient(Gradient {
+            stops: vec![stop(0.0, 0), stop(0.5, 0), stop(1.0, 200)],
+            shape: GradientShape::Linear { angle: 0.0, scaled: false },
+            rotate_with_shape: true,
+        }),
+    });
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    assert_eq!(img.pixel(50, 50)[0], 255, "the panel stays white outside the window");
+    assert!(img.pixel(300, 270)[0] < 8, "the window shows the background's black half: {:?}", img.pixel(300, 270));
+    // Laid out on the slide: three quarters across the slide is half way from black to grey.
+    let v = img.pixel(720, 270)[0] as i32;
+    assert!((v - 100).abs() <= 6, "{v}");
+}
+
+#[test]
+fn a_background_is_laid_over_white() {
+    // A background picture stretched into the bottom-right quarter (fillRect l=50% t=50%), and a
+    // half-transparent colour: PowerPoint shows white around and under them, not transparency.
+    use deckcraft_model::style::{Fill, PictureFill, PictureMode};
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(4, 4, image::Rgb([0, 0, 200]))).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    let mut p = deck_with(vec![]);
+    let media = p.add_media("bg.png", "image/png", png.into_inner());
+    let pf = PictureFill { media, mode: PictureMode::Stretch { fill_rect: [0.5, 0.5, 0.0, 0.0] }, ..Default::default() };
+    std::sync::Arc::make_mut(&mut p.slides[0]).background = Some(deckcraft_model::Background::Fill { fill: Fill::Picture(pf) });
+    let img = render_slide(&p, 0, &RenderOpts { scale: 0.5, ..Default::default() });
+    assert_eq!(img.pixel(20, 20), [255, 255, 255, 255], "white where the picture doesn't reach");
+    let q = img.pixel(400, 230);
+    assert!(q[2] > 190 && q[0] < 10 && q[3] == 255, "{q:?}");
+    let see_through = ColorRef::rgb(deckcraft_color::Rgba { r: 0, g: 0, b: 0, a: 128 });
+    std::sync::Arc::make_mut(&mut p.slides[0]).background = Some(deckcraft_model::Background::Fill { fill: Fill::solid(see_through) });
+    let img = render_slide(&p, 0, &RenderOpts { scale: 0.5, ..Default::default() });
+    let g = img.pixel(20, 20);
+    assert!(g[3] == 255 && (g[0] as i32 - 127).abs() <= 3, "half-transparent black over white is grey: {g:?}");
+}
+
+#[test]
+fn colour_glyphs_paint_their_layers() {
+    // A COLRv0 test font (crates/render/tests/fixtures): U+E000 is a red square with a blue
+    // square in its middle, U+E001 a square in the text colour.
+    deckcraft_fonts::FontDb::global().add_font(include_bytes!("../tests/fixtures/colr-squares.ttf").to_vec());
+    let mut sh = Shape { id: ShapeId(720), xfrm: Some(Xfrm::new(0.0, 0.0, 400.0, 200.0)), text_box: true, ..Default::default() };
+    let mut t = TextBody::from_text("\u{E000} \u{E001}");
+    let props = &mut t.paragraphs[0].runs[0].props;
+    props.size = Some(72.0);
+    props.font = Some("DeckCraft Colr Squares".into());
+    props.fill = Some(deckcraft_model::style::Fill::solid(ColorRef::rgb(deckcraft_color::Rgba::rgb(0, 160, 0))));
+    sh.text = Some(t);
+    let p = deck_with(vec![sh]);
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    let count = |f: &dyn Fn(&[u8; 4]) -> bool| img.pixels.as_chunks::<4>().0.iter().filter(|px| f(px)).count();
+    let red = count(&|p| p[0] > 230 && p[1] < 30 && p[2] < 30);
+    let blue = count(&|p| p[0] < 30 && p[1] < 30 && p[2] > 230);
+    let green = count(&|p| p[0] < 30 && p[1] > 140 && p[1] < 180 && p[2] < 30);
+    // 72 pt squares: the blue one is 40 % of the side (16 % of the area).
+    assert!(red > 2500 && blue > 500, "red {red} blue {blue}");
+    let share = blue as f64 / (red + blue) as f64;
+    assert!((share - 0.16).abs() < 0.03, "blue share {share}");
+    // The text-colour glyph is as big as the other square.
+    assert!((green as f64 / (red + blue) as f64 - 1.0).abs() < 0.1, "green {green} vs {}", red + blue);
+}
+
+#[test]
+fn a_text_gradient_starts_over_on_every_line() {
+    // PowerPoint fills each line of gradient text with the whole gradient, spanning that line
+    // (black at the top of every line to white at its bottom), not the text box.
+    use deckcraft_model::style::{Fill, Gradient, GradientShape, GradientStop};
+    let stop = |pos, v| GradientStop { pos, color: ColorRef::rgb(deckcraft_color::Rgba::rgb(v, v, v)) };
+    let mut sh = Shape { id: ShapeId(730), xfrm: Some(Xfrm::new(0.0, 0.0, 600.0, 500.0)), text_box: true, ..Default::default() };
+    let mut t = TextBody::from_text("HHHH\nHHHH");
+    for p in &mut t.paragraphs {
+        let props = &mut p.runs[0].props;
+        props.size = Some(80.0);
+        props.fill = Some(Fill::Gradient(Gradient {
+            stops: vec![stop(0.0, 0), stop(1.0, 255)],
+            shape: GradientShape::Linear { angle: 90.0, scaled: false },
+            rotate_with_shape: true,
+        }));
+    }
+    sh.text = Some(t);
+    let p = deck_with(vec![sh]);
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    // Ink rows (any pixel not white), grouped into the two lines.
+    let ink = |y: u32| (0..600).any(|x| img.pixel(x, y)[0] < 250);
+    let mut bands: Vec<(u32, u32)> = vec![];
+    for y in 0..500 {
+        if ink(y) {
+            match bands.last_mut() {
+                Some(b) if b.1 + 1 == y => b.1 = y,
+                _ => bands.push((y, y)),
+            }
+        }
+    }
+    assert_eq!(bands.len(), 2, "{bands:?}");
+    // The darkest ink in the first rows of each line.
+    let top = |b: (u32, u32)| (b.0..b.0 + 6).flat_map(|y| (0..600).map(move |x| (x, y))).map(|(x, y)| img.pixel(x, y)[0]).min().unwrap();
+    let (a, b) = (top(bands[0]), top(bands[1]));
+    assert!(a < 140 && (a as i32 - b as i32).abs() < 25, "line tops {a} and {b}: the second line starts dark again");
+    // ...and each line ends light.
+    let bottom = |b: (u32, u32)| (b.1 - 5..=b.1).flat_map(|y| (0..600).map(move |x| (x, y))).map(|(x, y)| img.pixel(x, y)[0]).min().unwrap();
+    for band in bands {
+        assert!(bottom(band) > 150, "line {band:?} ends at {}", bottom(band));
+    }
+}
+
+/// A text box of big black "IIII" with `set` applied to its run.
+fn effect_text(set: impl Fn(&mut deckcraft_model::text::RunProps)) -> Presentation {
+    let mut sh = Shape { id: ShapeId(740), xfrm: Some(Xfrm::new(100.0, 100.0, 600.0, 300.0)), text_box: true, ..Default::default() };
+    let mut t = TextBody::from_text("IIII");
+    let props = &mut t.paragraphs[0].runs[0].props;
+    props.size = Some(100.0);
+    props.fill = Some(deckcraft_model::style::Fill::solid(ColorRef::rgb(deckcraft_color::Rgba::rgb(0, 0, 0))));
+    set(props);
+    sh.text = Some(t);
+    deck_with(vec![sh])
+}
+
+#[test]
+fn text_glow_and_shadow_are_drawn() {
+    let count = |img: &Image, f: &dyn Fn(&[u8; 4]) -> bool| img.pixels.as_chunks::<4>().0.iter().filter(|px| f(px)).count();
+    let green = |p: &[u8; 4]| p[1] > 150 && p[0] < 120 && p[2] < 120;
+    let plain = effect_text(|_| {});
+    assert!(!needs_filters(&plain, &plain.slides[0]));
+    let img = render_slide(&plain, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    assert_eq!(count(&img, &green), 0);
+    // Glow: a green halo hugging the letters, needing the blur filter.
+    let glow =
+        effect_text(|p| p.glow = Some(deckcraft_model::style::Glow { color: ColorRef::rgb(deckcraft_color::Rgba::rgb(0, 255, 0)), radius: 8.0 }));
+    assert!(needs_filters(&glow, &glow.slides[0]), "text glow blurs");
+    let img = render_slide(&glow, 0, &RenderOpts { scale: 1.0, threads: 4, ..Default::default() });
+    let halo = count(&img, &green);
+    assert!(halo > 300, "green halo pixels {halo}");
+    // Shadow: grey ink below and right of the letters, where the plain text has none.
+    let shadow = effect_text(|p| {
+        p.shadow = Some(deckcraft_model::style::Shadow {
+            color: ColorRef::rgb(deckcraft_color::Rgba { r: 0, g: 0, b: 0, a: 128 }),
+            blur: 2.0,
+            dist: 12.0,
+            dir: 45.0,
+            inner: false,
+            sx: 1.0,
+            sy: 1.0,
+            kx: 0.0,
+            ky: 0.0,
+            align: String::new(),
+            rotate_with_shape: false,
+        })
+    });
+    let img = render_slide(&shadow, 0, &RenderOpts { scale: 1.0, threads: 4, ..Default::default() });
+    let base = render_slide(&plain, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    let grey = |p: &[u8; 4]| p[0] > 60 && p[0] < 230 && p[0] == p[1] && p[1] == p[2];
+    assert!(count(&img, &grey) > count(&base, &grey) + 300, "a grey shadow appears");
+}
