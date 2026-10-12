@@ -269,7 +269,12 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let what = if names.len() == 1 {
                 format!("“{}”", names[0])
             } else {
-                crate::i18n::count(names.len(), "presentations", "презентації", "презентацій", "презентацій")
+                crate::i18n::count(
+                    names.len(),
+                    "presentations",
+                    ["презентації", "презентацій", "презентацій"],
+                    ["prezentacji", "prezentacjach", "prezentacjach"],
+                )
             };
             ui.label(
                 egui::RichText::new(crate::i18n::format("Do you want to save the changes you made to {what}?", std::slice::from_ref(&what))).strong(),
@@ -609,7 +614,12 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     ui.label(format!(
                         "{} ({})",
                         s.name,
-                        crate::i18n::count(s.slides.len(), if s.slides.len() == 1 { "slide" } else { "slides" }, "слайд", "слайди", "слайдів")
+                        crate::i18n::count(
+                            s.slides.len(),
+                            if s.slides.len() == 1 { "slide" } else { "slides" },
+                            ["слайд", "слайди", "слайдів"],
+                            ["slajd", "slajdy", "slajdów"]
+                        )
                     ));
                     if ui.small_button(crate::i18n::tr("Delete")).clicked() {
                         let _ = app.run("show.customShow", json!({"name": s.name, "delete": true}));
@@ -751,6 +761,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                                 crate::i18n::Language::System => "system",
                                 crate::i18n::Language::En => "en",
                                 crate::i18n::Language::Uk => "uk",
+                                crate::i18n::Language::Pl => "pl",
                             };
                             let _ = app.run("app.language", json!({"language": code}));
                         }

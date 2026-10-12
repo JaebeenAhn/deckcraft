@@ -1,6 +1,6 @@
 # Localization parity with PowerPoint
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (Ukrainian UI catalog and language selection) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Polish UI catalog) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 
 DeckCraft's interface supports English and Ukrainian through `crates/ui-egui/src/i18n/uk.tsv`.
 Preferences offers the system language or an explicit choice; desktop choices persist across
@@ -41,7 +41,7 @@ support partly there), **55–90 h** to parity plus native-speaker review.
 | Korean | ko | 0 (0%) | no | system Hangul fonts; no IME composition | no | none | yes | 4–7 |
 | Vietnamese | vi | 0 (0%) | no | stacked diacritics through HarfRust | no | none | **no** (Windows only) | 3–5 |
 
-Other languages shipped: **1 (Ukrainian)**. PowerPoint for Mac ships 16 more
+Other languages shipped: **2 (Ukrainian, Polish)**. The Polish catalog (`i18n/pl.tsv`) has the same 1,232 keys as the Ukrainian one, its own integer-count forms, and no second native-speaker review yet. PowerPoint for Mac ships 16 more
 than the twelve above: Czech, Danish, Greek, Finnish, Hebrew, Hungarian, Italian, Dutch, Norwegian,
 Polish, Russian, Slovak, Swedish, Thai, Turkish and Traditional Chinese.
 
@@ -59,5 +59,6 @@ common misspellings (`crates/engine/src/cmd/review.rs`); see [gaps.md](gaps.md#p
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | Added Polish catalog (1,232 keys, same set as Ukrainian), `pl` locales and Polish count forms |
 | 2026-10-10 | minor | Added Ukrainian catalog, language selection, English fallback, preserved custom prompts and bundled-font coverage |
 | 2026-10-10 | major | Created: twelve-language table, ~1,050 UI strings measured, PowerPoint for Mac's 26 languages from its bundle |

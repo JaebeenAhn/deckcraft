@@ -360,6 +360,7 @@ impl SlideApp {
                     "system" => i18n::Language::System,
                     "en" => i18n::Language::En,
                     "uk" => i18n::Language::Uk,
+                    "pl" => i18n::Language::Pl,
                     _ => return Err("unknown interface language".into()),
                 };
                 i18n::set_current(self.ui.interface_language.resolve(self.services.system_locale.as_deref()));

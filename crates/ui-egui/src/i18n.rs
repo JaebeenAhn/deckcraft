@@ -13,22 +13,30 @@ pub enum Language {
     System,
     En,
     Uk,
+    Pl,
 }
 
 impl Language {
-    pub const ALL: [Self; 3] = [Self::System, Self::En, Self::Uk];
+    pub const ALL: [Self; 4] = [Self::System, Self::En, Self::Uk, Self::Pl];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::System => tr("System language"),
             Self::En => "English",
             Self::Uk => "Українська",
+            Self::Pl => "Polski",
         }
     }
 
     pub fn from_locale(locale: &str) -> Self {
         let language = locale.split(['-', '_', '.', '@']).next().unwrap_or("");
-        if language.eq_ignore_ascii_case("uk") { Self::Uk } else { Self::En }
+        if language.eq_ignore_ascii_case("uk") {
+            Self::Uk
+        } else if language.eq_ignore_ascii_case("pl") {
+            Self::Pl
+        } else {
+            Self::En
+        }
     }
 
     pub fn resolve(self, locale: Option<&str>) -> Self {
@@ -49,27 +57,43 @@ pub fn set_current(language: Language) {
 }
 
 const CATALOG: &str = include_str!("i18n/uk.tsv");
+const PL_CATALOG: &str = include_str!("i18n/pl.tsv");
 static UK: OnceLock<HashMap<String, String>> = OnceLock::new();
+static PL: OnceLock<HashMap<String, String>> = OnceLock::new();
+
+fn parse(text: &str) -> HashMap<String, String> {
+    text.lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once('\t'))
+        .map(|(source, text)| (source.replace("\\n", "\n"), text.replace("\\n", "\n")))
+        .collect()
+}
 
 fn catalog() -> &'static HashMap<String, String> {
-    UK.get_or_init(|| {
-        CATALOG
-            .lines()
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .filter_map(|line| line.split_once('\t'))
-            .map(|(source, text)| (source.replace("\\n", "\n"), text.replace("\\n", "\n")))
-            .collect()
-    })
+    UK.get_or_init(|| parse(CATALOG))
+}
+
+fn polish() -> &'static HashMap<String, String> {
+    PL.get_or_init(|| parse(PL_CATALOG))
+}
+
+/// The catalog of the language being drawn; `None` for English.
+fn active() -> Option<&'static HashMap<String, String>> {
+    match CURRENT.get() {
+        Language::Uk => Some(catalog()),
+        Language::Pl => Some(polish()),
+        Language::System | Language::En => None,
+    }
 }
 
 /// Exact lookup at an explicit interface boundary; unknown text falls back to English.
 pub fn tr(text: &str) -> &str {
-    if CURRENT.get() == Language::Uk { catalog().get(text).map(String::as_str).unwrap_or(text) } else { text }
+    active().and_then(|catalog| catalog.get(text)).map(String::as_str).unwrap_or(text)
 }
 
 /// Context-specific interface label with the original English source as fallback.
 pub fn tr_context<'a>(source: &'a str, key: &str) -> &'a str {
-    if CURRENT.get() == Language::Uk { catalog().get(key).map(String::as_str).unwrap_or(source) } else { source }
+    active().and_then(|catalog| catalog.get(key)).map(String::as_str).unwrap_or(source)
 }
 
 pub fn placeholder_prompt(kind: deckcraft_model::PhType) -> &'static str {
@@ -101,28 +125,29 @@ pub fn format(source: &str, values: &[String]) -> String {
     out
 }
 
-/// Ukrainian integer count forms: 1/21; 2–4/22–24; 0/5–19.
-pub fn count(n: usize, english: &str, one: &str, few: &str, many: &str) -> String {
-    let word = if CURRENT.get() == Language::Uk {
-        match (n % 10, n % 100) {
-            (1, last) if last != 11 => one,
-            (2..=4, last) if !(12..=14).contains(&last) => few,
-            _ => many,
-        }
-    } else {
-        english
+/// Integer count forms, each as `[one, few, many]`. Ukrainian: 1/21; 2–4/22–24; 0/5–19.
+/// Polish: 1 only; 2–4/22–24; 0/5–21 (21 takes the "many" form, unlike Ukrainian).
+pub fn count(n: usize, english: &str, ukrainian: [&str; 3], polish: [&str; 3]) -> String {
+    let few = matches!(n % 10, 2..=4) && !(12..=14).contains(&(n % 100));
+    let word = match CURRENT.get() {
+        Language::Uk if n % 10 == 1 && n % 100 != 11 => ukrainian[0],
+        Language::Uk if few => ukrainian[1],
+        Language::Uk => ukrainian[2],
+        Language::Pl if n == 1 => polish[0],
+        Language::Pl if few => polish[1],
+        Language::Pl => polish[2],
+        Language::System | Language::En => english,
     };
     format!("{n} {word}")
 }
 
-/// Recovery notice includes accusative Ukrainian forms.
+/// Recovery notice includes accusative Ukrainian and Polish forms.
 pub fn recovered(n: usize) -> String {
     let amount = count(
         n,
         if n == 1 { "unsaved presentation" } else { "unsaved presentations" },
-        "незбережену презентацію",
-        "незбережені презентації",
-        "незбережених презентацій",
+        ["незбережену презентацію", "незбережені презентації", "незбережених презентацій"],
+        ["niezapisaną prezentację", "niezapisane prezentacje", "niezapisanych prezentacji"],
     );
     format("Recovered {} from the last session", &[amount])
 }
@@ -175,10 +200,13 @@ mod tests {
             let label = crate::ribbon::option_label(option);
             if !label.is_empty() && !label.chars().all(|c| c.is_ascii_digit()) {
                 assert!(catalog().contains_key(&label), "missing effect option: {option}: {label}");
+                assert!(polish().contains_key(&label), "missing Polish effect option: {option}: {label}");
             }
         }
-        let missing: Vec<_> = required.into_iter().filter(|key| !catalog().contains_key(*key)).collect();
+        let missing: Vec<_> = required.iter().filter(|key| !catalog().contains_key(**key)).collect();
         assert!(missing.is_empty(), "missing visible metadata: {missing:?}");
+        let missing: Vec<_> = required.iter().filter(|key| !polish().contains_key(**key)).collect();
+        assert!(missing.is_empty(), "missing visible metadata in Polish: {missing:?}");
     }
 
     #[test]
@@ -223,6 +251,7 @@ mod tests {
                         .unwrap();
                     let key: String = serde_json::from_str(&format!("\"{}\"", &tail[..end])).unwrap();
                     assert!(catalog().contains_key(&key), "missing literal translation: {key}");
+                    assert!(polish().contains_key(&key), "missing Polish literal translation: {key}");
                     rest = &tail[end + 1..];
                 }
             }
@@ -274,7 +303,7 @@ mod tests {
     fn ukrainian_interface_preview() {
         let dir = std::env::var("DECKCRAFT_I18N_SHOTS").unwrap();
         std::fs::create_dir_all(&dir).unwrap();
-        for (code, language) in [("en", Language::En), ("uk", Language::Uk)] {
+        for (code, language) in [("en", Language::En), ("uk", Language::Uk), ("pl", Language::Pl)] {
             for (name, dialog) in [("editor", None), ("preferences", Some("preferences")), ("table", Some("table"))] {
                 let mut app = crate::SlideApp::new(deckcraft_engine::Session::new(), crate::Services::default());
                 app.run("file.new", serde_json::json!({})).unwrap();
@@ -310,15 +339,81 @@ mod tests {
 
     #[test]
     fn catalog_is_unique_complete_and_preserves_placeholders() {
-        let mut seen = std::collections::HashSet::new();
-        for (line_no, line) in CATALOG.lines().enumerate() {
-            if line.is_empty() || line.starts_with('#') {
-                continue;
+        for catalog in [CATALOG, PL_CATALOG] {
+            let mut seen = std::collections::HashSet::new();
+            for (line_no, line) in catalog.lines().enumerate() {
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let (source, text) = line.split_once('\t').unwrap();
+                assert!(seen.insert(source), "duplicate on {}: {source}", line_no + 1);
+                assert!(!text.trim().is_empty(), "empty translation: {source}");
+                assert_eq!(placeholders(source), placeholders(text), "placeholder names/order/format: {source}");
             }
-            let (source, text) = line.split_once('\t').unwrap();
-            assert!(seen.insert(source), "duplicate on {}: {source}", line_no + 1);
-            assert!(!text.trim().is_empty(), "empty translation: {source}");
-            assert_eq!(placeholders(source), placeholders(text), "placeholder names/order/format: {source}");
+        }
+        // Polish translates exactly the keys Ukrainian does, so neither falls back to English.
+        let mut only_one: Vec<_> = catalog().keys().filter(|key| !polish().contains_key(*key)).collect();
+        only_one.extend(polish().keys().filter(|key| !catalog().contains_key(*key)));
+        assert!(only_one.is_empty(), "keys in one catalog only: {only_one:?}");
+    }
+
+    #[test]
+    fn polish_locales_lookup_and_document_data() {
+        for locale in ["pl", "pl-PL", "pl_PL.UTF-8", "PL_pl@euro"] {
+            assert_eq!(Language::from_locale(locale), Language::Pl);
+        }
+        assert_eq!(Language::from_locale("plt"), Language::En);
+        let mut app = crate::SlideApp::new(deckcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", serde_json::json!({})).unwrap();
+        app.run("insert.textBox", serde_json::json!({"text": "File {customer} / Raport", "rect": [1, 2, 100, 40]})).unwrap();
+        let before = serde_json::to_value(&app.session.active().unwrap().doc).unwrap();
+        app.run("app.language", serde_json::json!({"language": "pl"})).unwrap();
+        assert_eq!(app.ui.interface_language, Language::Pl);
+        assert_eq!(tr("File"), "Plik");
+        assert_eq!(tr_context("Insert", "@ribbon:Insert"), "Wstawianie");
+        assert_eq!(tr("Insert"), "Wstaw");
+        assert_eq!(tr("a user-defined slide title"), "a user-defined slide title");
+        assert_eq!(before, serde_json::to_value(&app.session.active().unwrap().doc).unwrap());
+        let round_trip: crate::UiState = serde_json::from_str(&serde_json::to_string(&app.ui).unwrap()).unwrap();
+        assert_eq!(round_trip.interface_language, Language::Pl);
+        set_current(Language::En);
+    }
+
+    #[test]
+    fn polish_integer_counts_differ_from_ukrainian_at_21() {
+        set_current(Language::Pl);
+        for (n, word) in [
+            (0, "slajdów"),
+            (1, "slajd"),
+            (2, "slajdy"),
+            (4, "slajdy"),
+            (5, "slajdów"),
+            (12, "slajdów"),
+            (14, "slajdów"),
+            (21, "slajdów"),
+            (22, "slajdy"),
+            (25, "slajdów"),
+            (112, "slajdów"),
+            (122, "slajdy"),
+        ] {
+            assert_eq!(count(n, "slides", ["слайд", "слайди", "слайдів"], ["slajd", "slajdy", "slajdów"]), format!("{n} {word}"));
+        }
+        assert_eq!(recovered(3), "Odzyskano 3 niezapisane prezentacje z ostatniej sesji");
+        set_current(Language::En);
+    }
+
+    #[test]
+    fn the_document_fallback_font_covers_polish_letters_without_system_fonts() {
+        let db = deckcraft_fonts::FontDb::with_font_dirs(vec![]);
+        let face = db.face(deckcraft_fonts::LAST_RESORT_FAMILY, "Regular");
+        let letters: std::collections::HashSet<_> = polish()
+            .values()
+            .flat_map(|value| value.chars())
+            .chain("ĄąĆćĘęŁłŃńÓóŚśŹźŻż„”".chars())
+            .filter(|c| c.is_alphabetic() || "„”".contains(*c))
+            .collect();
+        for c in letters {
+            assert_ne!(face.glyph_for(c), 0, "missing document fallback glyph: {c}");
         }
     }
 
@@ -351,7 +446,7 @@ mod tests {
             (24, "слайди"),
             (111, "слайдів"),
         ] {
-            assert_eq!(count(n, "slides", "слайд", "слайди", "слайдів"), format!("{n} {word}"));
+            assert_eq!(count(n, "slides", ["слайд", "слайди", "слайдів"], ["slajd", "slajdy", "slajdów"]), format!("{n} {word}"));
         }
         set_current(Language::En);
     }

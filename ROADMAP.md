@@ -106,7 +106,7 @@ Presentation content and command IDs retain their original values. Detail:
 | Vietnamese | vi | 0% | none | 3–5 |
 
 Other languages shipped: **Ukrainian (uk)**, with English fallback and bundled Cyrillic glyph
-coverage. PowerPoint for Mac ships 26 languages; additional catalogs and native review remain.
+coverage, and **Polish (pl)**. PowerPoint for Mac ships 26 languages; additional catalogs and native review remain.
 
 ## Upcoming
 
