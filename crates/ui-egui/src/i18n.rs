@@ -192,17 +192,20 @@ mod tests {
         required.extend(deckcraft_color::STANDARD_COLORS.iter().map(|color| color.1));
         required.extend(deckcraft_color::SchemeSlot::THEME.iter().map(|slot| slot.label()));
         required.extend(["@ribbon:Home", "@ribbon:Insert"]);
-        for option in deckcraft_model::anim::TRANSITIONS
+        // Transition options are labelled per transition (the same `l` is "From Right" for Push
+        // and "Left" for Peel Off); animation options have one label each.
+        let mut option_labels: Vec<String> = deckcraft_model::anim::TRANSITIONS
             .iter()
-            .flat_map(|effect| effect.4)
-            .chain(deckcraft_model::anim::ANIMATIONS.iter().flat_map(|effect| effect.5))
-        {
-            let label = crate::ribbon::option_label(option);
-            if !label.is_empty() && !label.chars().all(|c| c.is_ascii_digit()) {
-                assert!(catalog().contains_key(&label), "missing effect option: {option}: {label}");
-                assert!(polish().contains_key(&label), "missing Polish effect option: {option}: {label}");
-            }
-        }
+            .flat_map(|effect| effect.4.iter().map(|option| deckcraft_model::anim::transition_option_label(effect.0, option)))
+            .collect();
+        option_labels.extend(deckcraft_model::anim::ANIMATIONS.iter().flat_map(|effect| effect.5).map(|option| crate::ribbon::option_label(option)));
+        option_labels.retain(|label| !label.is_empty() && !label.chars().all(|c| c.is_ascii_digit()));
+        option_labels.sort();
+        option_labels.dedup();
+        let missing: Vec<_> = option_labels.iter().filter(|label| !catalog().contains_key(*label)).collect();
+        assert!(missing.is_empty(), "missing effect options: {missing:?}");
+        let missing: Vec<_> = option_labels.iter().filter(|label| !polish().contains_key(*label)).collect();
+        assert!(missing.is_empty(), "missing Polish effect options: {missing:?}");
         let missing: Vec<_> = required.iter().filter(|key| !catalog().contains_key(**key)).collect();
         assert!(missing.is_empty(), "missing visible metadata: {missing:?}");
         let missing: Vec<_> = required.iter().filter(|key| !polish().contains_key(**key)).collect();
