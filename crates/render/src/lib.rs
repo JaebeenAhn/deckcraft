@@ -684,6 +684,24 @@ impl Renderer {
         if depth > 0 && view.determinant().abs() > 1e-12 && view.is_finite() { (view, view.inverse() * m) } else { (m, Affine::IDENTITY) }
     }
 
+    /// The size and transform a shape's text is set in: inside a group whose child coordinates
+    /// scale the shape, the shape's size in slide points and `m` with that scale taken out, so
+    /// insets and font sizes stay in points; otherwise `w`, `h` and `m` themselves.
+    fn text_space(&self, m: Affine, depth: usize, w: f64, h: f64) -> (f64, f64, Affine) {
+        let (_, rel) = self.line_space(m, depth);
+        let c = rel.as_coeffs();
+        let (sx, sy) = (c[0].hypot(c[1]), c[2].hypot(c[3]));
+        let ok = |k: f64| k.is_finite() && k > 1e-9;
+        if depth == 0 || !ok(sx) || !ok(sy) || ((sx - 1.0).abs() < 1e-9 && (sy - 1.0).abs() < 1e-9) {
+            return (w, h, m);
+        }
+        let (tw, th) = (w * sx, h * sy);
+        if !tw.is_finite() || !th.is_finite() {
+            return (w, h, m);
+        }
+        (tw, th, m * Affine::scale_non_uniform(1.0 / sx, 1.0 / sy))
+    }
+
     fn shape_at(&mut self, ctx: &mut RenderContext, f: &Frame, rctx: &Ctx, s: &Shape, parent: Affine, depth: usize) {
         if depth > 32 || (s.hidden && !f.opts.show_hidden) || f.opts.skip.contains(&s.id) {
             return;
@@ -857,6 +875,25 @@ impl Renderer {
                 }
             }
         }
+        // `a:fillOverlay`: a fill blended over the shape's fill (PowerPoint's "Flow" themes multiply
+        // a gradient over a tiled picture), inside the filled outline, under the line.
+        if let Some(ov) = effects.as_ref().and_then(|e| e.fill_overlay.as_ref())
+            && fill.as_ref().is_some_and(|f| !f.is_none())
+        {
+            let mix = match ov.blend.as_str() {
+                "mult" => peniko::Mix::Multiply,
+                "screen" => peniko::Mix::Screen,
+                "darken" => peniko::Mix::Darken,
+                "lighten" => peniko::Mix::Lighten,
+                _ => peniko::Mix::Normal,
+            };
+            for (i, sp) in geo.paths.iter().enumerate().filter(|(i, sp)| sp.fill != FillMode::None && fade(*i).fill > 0.0) {
+                ctx.set_transform(m);
+                ctx.push_layer(Some(&sp.path), Some(peniko::BlendMode::new(mix, peniko::Compose::SrcOver)), None, None, None);
+                paint::fill_path(ctx, rctx, &ov.fill, fx_ph, &sp.path, Rect::new(0.0, 0.0, w, h), m, FillMode::Norm, fade(i).fill, f.pres);
+                ctx.pop_layer();
+            }
+        }
         // Outline.
         if line.fill.as_ref().is_some_and(|f| !f.is_none()) {
             let lw = line.width.unwrap_or(0.75).max(0.0);
@@ -924,6 +961,16 @@ impl Renderer {
         if let Some(body) = &s.text
             && !skip_text
         {
+            // Text in a group is set at the shape's size on the slide, in points: a group's
+            // child-coordinate scale sizes and places the box, never the type (#233's twin).
+            let (tw, th, m) = self.text_space(m, depth, w, h);
+            let text_geo;
+            let geo = if (tw, th) == (w, h) {
+                &geo
+            } else {
+                text_geo = shape_geometry(s, tw, th);
+                &text_geo
+            };
             let tr = geo.text_rect;
             if !body.is_empty() {
                 let l = deckcraft_text::layout(rctx, s, body, &Opts { rect: tr, fields: &f.fields, prompt_color: None, no_shrink: false });
