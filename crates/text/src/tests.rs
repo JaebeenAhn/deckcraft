@@ -45,6 +45,75 @@ fn bullets_are_drawn_for_body_text() {
     assert_eq!(l.para_lines.len(), 2);
 }
 
+/// Glyph count and width of `text` laid out in one line of `family` at 40 pt, kern threshold `kern`.
+fn glyphs_and_width(family: &str, text: &str, kern: Option<f64>) -> (usize, f64) {
+    let (p, mut sh) = setup(text, 2000.0, 300.0);
+    let para = &mut sh.text.as_mut().unwrap().paragraphs[0];
+    para.props.bullet = Some(Bullet::None);
+    for r in &mut para.runs {
+        r.props.font = Some(family.into());
+        r.props.size = Some(40.0);
+        r.props.kern = kern;
+    }
+    let l = lay(&p, &sh, 2000.0, 300.0);
+    let n = l.runs.iter().map(|r| r.glyphs.len()).sum();
+    (n, l.lines[0].extent.1 - l.lines[0].extent.0)
+}
+
+/// The first installed or bundled family of `families` for which `pick` holds.
+fn first_family(families: &[&str], pick: impl Fn(&FontFace) -> bool) -> Option<String> {
+    let db = FontDb::global();
+    families.iter().filter(|f| db.has_family(f)).map(|f| db.face(f, "Regular")).find(|f| pick(f)).map(|f| f.family.clone())
+}
+
+const LATIN_FAMILIES: &[&str] = &["Carlito", "Calibri", "DejaVu Sans", "Liberation Sans", "Inter", "Arial", "Cambria", "Times New Roman"];
+
+#[test]
+fn latin_text_draws_no_ligatures() {
+    // PowerPoint keeps "fi", "ffi" and Calibri's "ti" apart, although the fonts have them as
+    // standard ligatures.
+    let ligates = |f: &FontFace| deckcraft_fonts::shape(f, "office", &[], |c| c).len() < 6;
+    let Some(family) = first_family(LATIN_FAMILIES, ligates) else {
+        eprintln!("skipped: no font with an ffi ligature");
+        return;
+    };
+    let (n, _) = glyphs_and_width(&family, "office fifth", Some(0.0));
+    assert_eq!(n, 12, "{family}: one glyph per character");
+}
+
+#[test]
+fn pairs_are_kerned_only_from_the_kern_size() {
+    let kerns = |f: &FontFace| {
+        let w = |feat: &[deckcraft_fonts::Feature]| deckcraft_fonts::shape(f, "AVATAR", feat, |c| c).iter().map(|g| g.x_advance).sum::<i32>();
+        w(&[]) != w(&deckcraft_fonts::feature("-kern").into_iter().collect::<Vec<_>>())
+    };
+    let Some(family) = first_family(LATIN_FAMILIES, kerns) else {
+        eprintln!("skipped: no font that kerns AVATAR");
+        return;
+    };
+    // `kern` is the smallest size kerned; 0 is no kerning.
+    let (_, off) = glyphs_and_width(&family, "AVATAR WAVE", Some(0.0));
+    let (_, on) = glyphs_and_width(&family, "AVATAR WAVE", Some(12.0));
+    let (_, at) = glyphs_and_width(&family, "AVATAR WAVE", Some(40.0));
+    let (_, above) = glyphs_and_width(&family, "AVATAR WAVE", Some(48.0));
+    assert!(on < off - 2.0, "{family}: kerned {on} vs {off}");
+    assert!((at - on).abs() < 0.01, "kerned at exactly the threshold size");
+    assert!((above - off).abs() < 0.01, "40 pt is below a 48 pt threshold");
+}
+
+#[test]
+fn ligatures_stay_for_scripts_that_need_them() {
+    let has = |f: &[deckcraft_fonts::Feature], tag: &str| f.iter().any(|x| Some(*x) == deckcraft_fonts::feature(tag));
+    let cells =
+        |s: &str| s.chars().map(|ch| Cell { ch, style: 0, face: 0, level: 0, glyphs: vec![], adv: 0.0, head: 0, boundary: true }).collect::<Vec<_>>();
+    let latin = shaping_features(&cells("office"), &[], Some(*b"Latn"));
+    assert!(has(&latin, "-liga") && has(&latin, "-clig") && has(&latin, "-kern"));
+    // Arabic needs its ligatures; emoji sequences are joined by them.
+    assert!(!has(&shaping_features(&cells("\u{644}\u{627}"), &[], Some(*b"Arab")), "-liga"));
+    assert!(!has(&shaping_features(&cells("a\u{1F469}\u{200D}\u{1F4BB}"), &[], Some(*b"Latn")), "-liga"));
+    assert!(!has(&shaping_features(&cells("12"), &[], None), "-liga"));
+}
+
 #[test]
 fn only_the_first_character_of_a_bullet_is_drawn() {
     // "••" (seen in the wild) draws one dot in PowerPoint.
@@ -623,4 +692,29 @@ fn a_bullet_the_text_font_lacks_falls_back_to_a_face_that_has_it() {
         assert!(b.face.covers('①'), "drawn with {}, which lacks the circled digit", b.face.family);
         assert!(b.glyphs.iter().all(|g| g.0 != 0), "no missing-glyph box");
     }
+}
+
+#[test]
+fn symbol_font_bullets_map_by_font() {
+    // Wingdings 2 code 0xEA is a star, Wingdings 3 0x7D a right-pointing triangle; plain
+    // Wingdings keeps its own table (0xA7 is a small square).
+    let star = String::from_utf8(vec![0xEF, 0x83, 0xAA]).unwrap(); // U+F0EA
+    assert_eq!(map_symbol_bullet(&star, Some("Wingdings 2")), "★");
+    assert_eq!(map_symbol_bullet("\u{7d}", Some("Wingdings 3")), "►");
+    assert_eq!(map_symbol_bullet("\u{f0a7}", Some("Wingdings")), "▪");
+    assert_eq!(map_symbol_bullet("•", Some("Arial")), "•");
+    assert!(is_symbol_font("Wingdings 2") && is_symbol_font("Symbol") && !is_symbol_font("Arial"));
+}
+
+#[test]
+fn an_installed_symbol_font_draws_its_own_bullet() {
+    // Where the deck's symbol font is installed, its glyph is drawn (as PowerPoint does), not a
+    // look-alike. Skipped without Wingdings 2.
+    let db = FontDb::global();
+    if !db.has_family("Wingdings 2") {
+        return;
+    }
+    let face = db.face("Wingdings 2", "Regular");
+    assert_eq!(symbol_font_char(&face, "\u{ea}", Some("Wingdings 2")), Some('\u{f0ea}'));
+    assert_eq!(symbol_font_char(&face, "\u{ea}", Some("Arial")), None);
 }

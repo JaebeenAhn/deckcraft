@@ -9,13 +9,19 @@
 
 mod chart;
 mod colr;
+
+mod compound;
 mod images;
 mod morph_path;
 mod morph_text;
 mod paint;
+mod pattern;
+
+mod pathgrad;
 mod placed;
 mod ramp;
 mod table;
+mod warp;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -763,18 +769,23 @@ impl Renderer {
             }
         }
         if let Some(r) = soft {
-            // Feather: fade the shape's alpha towards the outline.
+            // Feather: the shape (fill and line) fades to nothing at its outline. Measured on
+            // PowerPoint's export: the mask is the outline shrunk by 0.85 r, blurred by a third of
+            // r, so it's half opaque 0.85 r inside the edge and transparent at the edge itself.
             ctx.set_transform(m);
             ctx.push_layer(
                 None,
                 Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestIn)),
                 None,
                 None,
-                Some(blur(r * 0.5 * scale_of(m))),
+                Some(blur(r / 3.0 * scale_of(m))),
             );
             ctx.set_paint(peniko::Color::from_rgba8(0, 0, 0, 255));
-            let inset = Rect::new(0.0, 0.0, w, h).inset(-r * 0.6);
-            ctx.fill_rect(&inset);
+            ctx.fill_path(&outline);
+            ctx.push_blend_layer(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestOut));
+            ctx.set_stroke(kurbo::Stroke::new(r * 1.7).with_join(kurbo::Join::Round));
+            ctx.stroke_path(&outline);
+            ctx.pop_layer();
             ctx.pop_layer();
             ctx.pop_layer();
         }
@@ -786,11 +797,14 @@ impl Renderer {
             ctx.push_clip_layer(&outline);
             let c = rctx.color(&sh.color, fx_ph);
             let d = Vec2::new(sh.dir.to_radians().cos(), sh.dir.to_radians().sin()) * sh.dist;
-            ctx.push_layer(None, None, None, None, Some(blur(sh.blur * 0.5 * scale_of(m))));
+            // As PowerPoint draws it (measured on its export): the shadow falls inside along the
+            // edges it points to (45 degrees: the bottom and right), blurred by a third of the
+            // blur radius.
+            ctx.push_layer(None, None, None, None, Some(blur(sh.blur / 3.0 * scale_of(m))));
             ctx.set_paint(color(c, 1.0));
             let mut ring = Rect::new(0.0, 0.0, w, h).inflate(w.max(h), w.max(h)).to_path(0.1);
             let mut hole = outline.clone();
-            hole.apply_affine(Affine::translate(d));
+            hole.apply_affine(Affine::translate(-d));
             ring.extend(hole.iter());
             ctx.set_fill_rule(peniko::Fill::EvenOdd);
             ctx.fill_path(&ring);
@@ -806,7 +820,10 @@ impl Renderer {
             let tr = geo.text_rect;
             if !body.is_empty() {
                 let l = deckcraft_text::layout(rctx, s, body, &Opts { rect: tr, fields: &f.fields, prompt_color: None, no_shrink: false });
-                draw_layout_with(ctx, &l, tr, m, &st.paras);
+                match text_warp(rctx, s, tr).filter(|_| l.rotation == 0.0) {
+                    Some(w) => warp::draw(ctx, &l, tr, m, &st.paras, &w),
+                    None => draw_layout_with(ctx, &l, tr, m, &st.paras),
+                }
             } else if f.opts.edit && s.ph.is_some() {
                 let kind = s.ph_type().unwrap_or(PhType::Body);
                 let prompt_body = prompt_body(rctx, s, kind, f.opts.placeholder_prompt.map(|prompt| prompt(kind)));
@@ -861,7 +878,8 @@ impl Renderer {
             // Shadow offset is in slide space (doesn't rotate with the shape unless asked).
             let sm = if sh.rotate_with_shape { m * Affine::translate(d) * local } else { pre_translate(m, d * k) * local };
             ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, None, Some((c.a as f32) / 255.0), None, Some(blur(sh.blur * 0.5 * k)));
+            // Blurred by a third of the blur radius, as PowerPoint's export shows.
+            ctx.push_layer(None, None, Some((c.a as f32) / 255.0), None, Some(blur(sh.blur / 3.0 * k)));
             ctx.set_transform(sm);
             ctx.set_paint(color(c.with_alpha(255), 1.0));
             ctx.fill_path(&silhouette);
@@ -870,10 +888,12 @@ impl Renderer {
         if let Some(g) = &e.glow {
             let c = rctx.color(&g.color, ph);
             ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, None, Some((c.a as f32) / 255.0), None, Some(blur(g.radius * 0.35 * k)));
+            // Measured on PowerPoint's export: a glow of radius r is half strength about half of r
+            // out from the outline and gone by r.
+            ctx.push_layer(None, None, Some((c.a as f32) / 255.0), None, Some(blur(g.radius * 0.17 * k)));
             ctx.set_transform(m);
             ctx.set_paint(color(c.with_alpha(255), 1.0));
-            ctx.set_stroke(kurbo::Stroke::new(g.radius.max(0.0) * 1.2).with_join(kurbo::Join::Round));
+            ctx.set_stroke(kurbo::Stroke::new(g.radius.max(0.0) * 0.95).with_join(kurbo::Join::Round));
             ctx.stroke_path(&silhouette);
             ctx.fill_path(&silhouette);
             ctx.pop_layer();
@@ -942,6 +962,19 @@ fn stroke(ctx: &mut RenderContext, rctx: &Ctx, line: &Line, ph: Option<Rgba>, pa
             ctx.set_paint(color(c, alpha));
         }
         _ => ctx.set_paint(color(Rgba::BLACK, alpha)),
+    }
+    // Compound lines: each band stroked along the path moved to its place across the width.
+    let compound = line.compound.unwrap_or_default();
+    if compound != deckcraft_model::style::Compound::Single && lw * scale_of(m) >= 1.5 {
+        let tolerance = 0.1 / scale_of(m).max(1e-6);
+        for &(a, b) in compound::bands(compound) {
+            let d = (-0.5 + (a + b) / 2.0) * lw;
+            let mut band = sk.clone();
+            band.width = (b - a) * lw;
+            ctx.set_stroke(band);
+            ctx.stroke_path(&compound::offset(path, d, tolerance));
+        }
+        return;
     }
     ctx.set_stroke(sk);
     ctx.stroke_path(path);
@@ -1118,6 +1151,13 @@ pub fn text_transform(m: Affine, tr: Rect, rotation: f64) -> Affine {
         t = t * Affine::translate(c) * Affine::rotate(rotation.to_radians()) * Affine::translate(-c);
     }
     t
+}
+
+/// The WordArt warp of `s`'s text over its text rectangle `tr`, if it has one DeckCraft draws.
+pub fn text_warp(rctx: &Ctx, s: &Shape, tr: Rect) -> Option<deckcraft_geom::warp::Warp> {
+    let bp = resolve::body(rctx, s);
+    let name = bp.warp.as_deref()?;
+    deckcraft_geom::warp::warp(name, &bp.warp_adj, tr)
 }
 
 /// Draw an already laid-out text block.

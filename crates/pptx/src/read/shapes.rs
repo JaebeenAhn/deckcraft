@@ -394,6 +394,7 @@ fn smartart(imp: &mut Imp, part: &Part, gd: &El, frame: &Shape, depth: usize) ->
 fn table(imp: &mut Imp, part: &Part, tbl: &El) -> Table {
     let mut t = Table { style: "none".into(), first_row: false, band_row: false, ..Default::default() };
     if let Some(pr) = tbl.child("tblPr") {
+        t.background = pr.elements().find(|e| e.local().ends_with("Fill") && e.local() != "noFill").and_then(|f| dml::fill_el(imp, part, f));
         t.first_row = pr.bool("firstRow").unwrap_or(false);
         t.first_col = pr.bool("firstCol").unwrap_or(false);
         t.last_row = pr.bool("lastRow").unwrap_or(false);
@@ -401,7 +402,11 @@ fn table(imp: &mut Imp, part: &Part, tbl: &El) -> Table {
         t.band_row = pr.bool("bandRow").unwrap_or(false);
         t.band_col = pr.bool("bandCol").unwrap_or(false);
         if let Some(id) = pr.child("tableStyleId").map(|e| e.text()) {
-            t.style = crate::tables::style_from_guid(id.trim());
+            // A style the file defines is drawn from its definition (by its GUID).
+            // DeckCraft's own styles (written with GUIDs derived from their ids) map back to them.
+            let up = id.trim().to_ascii_uppercase();
+            t.style =
+                if imp.table_style_ids.contains(&up) && !crate::tables::is_own_guid(&up) { up } else { crate::tables::style_from_guid(id.trim()) };
         }
     }
     t.cols = tbl

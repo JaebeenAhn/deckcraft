@@ -203,6 +203,8 @@ struct Style {
     cs: Option<String>,
     /// Heading font (`+mj-…`): the theme's major font set applies.
     major: bool,
+    /// Pair kerning on: `a:rPr/@kern` is set and the size reaches it.
+    kern: bool,
 }
 
 /// One character of a paragraph after shaping.
@@ -314,6 +316,7 @@ fn make_style(ctx: &Ctx, r: &RunProps, scale: f64, prompt: Option<Rgba>) -> Styl
         ea,
         cs,
         major,
+        kern: r.kern.is_some_and(|k| k > 0.0 && size + 1e-6 >= k * scale),
     }
 }
 
@@ -493,6 +496,17 @@ fn shape_para(ctx: &Ctx, shape: &Shape, body: &TextBody, pi: usize, scale: f64, 
                 // Symbol fonts (Wingdings) aren't available: map common private-use bullets.
                 let ch = map_symbol_bullet(char, props.bullet_font.as_deref());
                 bullet_face(db, &mut st, &ch);
+
+                // A symbol font (Wingdings, Symbol…) that is installed draws its own glyph, found
+                // at U+F000 + the character code as such fonts map them; otherwise common symbol
+                // bullets are mapped to Unicode look-alikes.
+                let ch = match symbol_font_char(&st.face, char, props.bullet_font.as_deref()) {
+                    Some(c) => c.to_string(),
+                    None => map_symbol_bullet(char, props.bullet_font.as_deref()),
+                };
+                if !st.face.covers(ch.chars().next().unwrap_or('•')) {
+                    st.face = db.face("Inter", "Regular");
+                }
                 Some((ch, st))
             }
             Some(Bullet::AutoNum { scheme, start_at }) => {
@@ -602,7 +616,8 @@ fn shape_cells(ctx: &Ctx, text: &str, char_style: &[usize], styles: &[Style], fa
     // Items: maximal ranges of one level, face, script and shaping style (case mapping, language).
     let upper = |i: usize| styles.get(char_style.get(i).copied().unwrap_or(0)).is_some_and(|st| st.caps != Caps::None);
     let lang = |i: usize| styles.get(char_style.get(i).copied().unwrap_or(0)).and_then(|st| st.lang.as_deref());
-    let key = |i: usize| (levels.get(i).copied(), char_face.get(i).copied(), scripts.get(i).map(|s| s.0), upper(i), lang(i));
+    let kern = |i: usize| styles.get(char_style.get(i).copied().unwrap_or(0)).is_some_and(|st| st.kern);
+    let key = |i: usize| (levels.get(i).copied(), char_face.get(i).copied(), scripts.get(i).map(|s| s.0), upper(i), lang(i), kern(i));
     let mut a = 0;
     while a < n {
         let mut b = a + 1;
@@ -617,6 +632,24 @@ fn shape_cells(ctx: &Ctx, text: &str, char_style: &[usize], styles: &[Style], fa
 
 /// Size of superscript and subscript text relative to the run's size.
 const SUB_SUPER: f64 = 0.66;
+
+/// The OpenType features to change from the shaper's defaults for an item, as PowerPoint draws
+/// it: kerning only where the run asks for it (`kern`), and no standard or contextual ligatures in
+/// Latin, Greek and Cyrillic ("fi", "ffi" and Calibri's "ti" stay apart). Other scripts need
+/// their ligatures (Arabic lam-alef), and emoji sequences are joined by them.
+fn shaping_features(cells: &[Cell], styles: &[Style], script: Option<ScriptTag>) -> Vec<deckcraft_fonts::Feature> {
+    let mut f = vec![];
+    if !cells.first().and_then(|c| styles.get(c.style)).is_some_and(|st| st.kern) {
+        f.extend(deckcraft_fonts::feature("-kern"));
+    }
+    let alphabetic = matches!(script.as_ref(), Some(b"Latn" | b"Grek" | b"Cyrl"));
+    let emoji = cells.iter().any(|c| matches!(c.ch as u32, 0x200D | 0x20E3 | 0xFE0F | 0x2600..=0x27BF | 0x1F000..=0x1FAFF | 0xE0020..=0xE007F));
+    if alphabetic && !emoji {
+        f.extend(deckcraft_fonts::feature("-liga"));
+        f.extend(deckcraft_fonts::feature("-clig"));
+    }
+    f
+}
 
 /// Shape cells `range` (one item) and hang each cluster's glyphs on its first cell, sharing the
 /// cluster's advance among its graphemes (by the ligature's GDEF carets when it has them).
@@ -638,7 +671,8 @@ fn shape_item(
     let Some(face) = faces.get(fi) else { return };
     let rtl = level % 2 == 1;
     let (Some(&b0), Some(&b1)) = (byte_of.get(range.start), byte_of.get(range.end)) else { return };
-    let params = ShapeParams { features: &[], rtl, script, language: lang };
+    let features = shaping_features(cells.get(range.clone()).unwrap_or(&[]), styles, script);
+    let params = ShapeParams { features: &features, rtl, script, language: lang };
     let glyphs = deckcraft_fonts::shape_range(face, text, b0..b1, &params, |ch| if upper { ch.to_uppercase().next().unwrap_or(ch) } else { ch });
     let upem = face.upem.max(1.0);
     let scale_of = |cell: &Cell| {
@@ -715,11 +749,59 @@ fn shape_item(
     }
 }
 
+/// Is `family` a symbol font (characters at U+F000 + code)?
+fn is_symbol_font(family: &str) -> bool {
+    let f = family.to_ascii_lowercase();
+    f.starts_with("wingdings") || f == "symbol" || f.starts_with("webdings") || f.starts_with("marlett")
+}
+
+/// The character to draw bullet `c` with the installed symbol font `face`, when `font` names a
+/// symbol font that `face` is (not a substitute) and it has the glyph.
+fn symbol_font_char(face: &FontFace, c: &str, font: Option<&str>) -> Option<char> {
+    let font = font?;
+    if !is_symbol_font(font) || !face.family.eq_ignore_ascii_case(font) {
+        return None;
+    }
+    let first = c.chars().next()?;
+    let pua = char::from_u32(0xF000 | ((first as u32) & 0xFF))?;
+    if face.covers(pua) {
+        Some(pua)
+    } else if face.covers(first) {
+        Some(first)
+    } else {
+        None
+    }
+}
+
 fn map_symbol_bullet(c: &str, font: Option<&str>) -> String {
     let f = font.unwrap_or("").to_ascii_lowercase();
     let first = c.chars().next().unwrap_or('•');
     if f.contains("wingdings") || f.contains("symbol") || ('\u{f000}'..='\u{f0ff}').contains(&first) {
         let code = (first as u32) & 0xff;
+        // Wingdings 2 and 3 put different shapes at the same codes.
+        if f.starts_with("wingdings 2") {
+            let m = match code {
+                0x97 | 0x98 => '●',
+                0x9e..=0xa1 => '■',
+                0xa2..=0xa5 => '◆',
+                0xea..=0xf3 => '★',
+                0xb7..=0xbf => '○',
+                0x50 => '✓',
+                _ => '•',
+            };
+            return m.to_string();
+        }
+        if f.starts_with("wingdings 3") {
+            let m = match code {
+                0x7d | 0x75 => '►',
+                0x7c | 0x74 => '◄',
+                0x70 => '▲',
+                0x71 => '▼',
+                0xc6 | 0xc7 => '➔',
+                _ => '▶',
+            };
+            return m.to_string();
+        }
         let m = match code {
             0xa7 => '▪',
             0xd8 => '➢',
@@ -992,7 +1074,9 @@ fn layout_scaled(ctx: &Ctx, shape: &Shape, body: &TextBody, bp: &BodyProps, opts
         (r.x1 - bp.inset_r.unwrap_or(7.2)).max(r.x0 + bp.inset_l.unwrap_or(7.2)),
         (r.y1 - bp.inset_b.unwrap_or(3.6)).max(r.y0 + bp.inset_t.unwrap_or(3.6)),
     );
-    let wrap = bp.wrap.unwrap_or(true) && !matches!(bp.autofit, Some(AutoFit::Shape) if shape.text_box && !bp.wrap.unwrap_or(true));
+    // Text that follows a WordArt arch or circle is set on one line per paragraph.
+    let follow = bp.warp.as_deref().is_some_and(deckcraft_geom::warp::is_follow);
+    let wrap = bp.wrap.unwrap_or(true) && !follow && !matches!(bp.autofit, Some(AutoFit::Shape) if shape.text_box && !bp.wrap.unwrap_or(true));
     let ncols = bp.columns.unwrap_or(1).clamp(1, 16) as usize;
     let col_gap = bp.col_spacing.unwrap_or(0.0).max(0.0);
     let col_w = ((inner.width() - col_gap * (ncols as f64 - 1.0)) / ncols as f64).max(1.0);
