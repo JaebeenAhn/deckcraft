@@ -87,6 +87,22 @@ pub fn sp_tree(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, tree: &El, depth: us
     out
 }
 
+/// ActiveX controls (`p:controls`): each control's picture (`p:pic`), the image PowerPoint shows
+/// for it, as a picture above the slide's shapes. Controls without one are left out.
+pub fn controls(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, controls: &El) -> Vec<Shape> {
+    let mut out = vec![];
+    for c in controls.children_named("control") {
+        if ctx.count >= MAX_SHAPES {
+            break;
+        }
+        if let Some(p) = c.child("pic") {
+            ctx.count += 1;
+            out.push(pic(imp, part, ctx, p));
+        }
+    }
+    out
+}
+
 fn remap_connectors(shapes: &mut [Shape], ctx: &IdCtx, depth: usize) {
     if depth > MAX_TREE_DEPTH {
         return;
@@ -102,6 +118,18 @@ fn remap_connectors(shapes: &mut [Shape], ctx: &IdCtx, depth: usize) {
             _ => {}
         }
     }
+}
+
+/// PowerPoint's Lock (right-click > Lock, the Selection pane padlock) writes a full set of locking
+/// attributes; it reads an object as locked only when the whole set for its kind is there, so a
+/// lone `noMove` or `noResize` (other tools' partial locks) isn't Lock.
+fn is_locked(l: &El) -> bool {
+    let set: &[&str] = match l.local() {
+        "grpSpLocks" => &["noGrp", "noUngrp", "noRot", "noMove", "noResize"],
+        "graphicFrameLocks" => &["noGrp", "noDrilldown", "noMove", "noResize"],
+        _ => &["noGrp", "noRot", "noMove", "noResize", "noEditPoints", "noAdjustHandles", "noChangeArrowheads", "noChangeShapeType"],
+    };
+    set.iter().all(|a| l.bool(a) == Some(true))
 }
 
 /// Common non-visual properties (`p:nvSpPr`, `p:nvPicPr`…).
@@ -122,10 +150,10 @@ fn base(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, nv: Option<&El>) -> Shape {
             match e.local() {
                 "cNvSpPr" => {
                     s.text_box = e.bool("txBox").unwrap_or(false);
-                    s.locked = e.child("spLocks").is_some_and(|l| l.bool("noMove") == Some(true) && l.bool("noResize") == Some(true));
+                    s.locked = e.child("spLocks").is_some_and(is_locked);
                 }
                 "cNvPicPr" | "cNvGrpSpPr" | "cNvCxnSpPr" | "cNvGraphicFramePr" => {
-                    s.locked = e.elements().next().is_some_and(|l| l.bool("noMove") == Some(true) && l.bool("noResize") == Some(true));
+                    s.locked = e.elements().find(|l| l.local().ends_with("Locks")).is_some_and(is_locked);
                 }
                 "nvPr" => {
                     if let Some(ph) = e.child("ph") {
@@ -356,7 +384,8 @@ fn frame(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El, depth: usize) -> S
         let mut pics = vec![];
         e.find_all("blip", &mut pics);
         pics.into_iter().find_map(|b| dml::media_ref(imp, part, b))
-    };
+    }
+    .or_else(|| gd.and_then(|g| g.find("oleObj")).and_then(|o| vml_preview(imp, part, o.attr("spid")?)));
     let label = if let Some(o) = gd.and_then(|g| g.find("oleObj")) {
         o.attr("progId").or(o.attr("name")).unwrap_or("Object").to_string()
     } else if uri.ends_with("/diagram") {
@@ -368,6 +397,21 @@ fn frame(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El, depth: usize) -> S
     };
     s.kind = ShapeKind::Opaque { xml: part.keep(e), preview, label };
     s
+}
+
+/// The preview picture of an old-style embedded object (`p:oleObj spid` with no `p:pic`): the
+/// `v:imagedata` of the legacy VML drawing shape with that id, as PowerPoint 2007 wrote them.
+fn vml_preview(imp: &mut Imp, part: &Part, spid: &str) -> Option<deckcraft_model::MediaId> {
+    for rel in part.rels.items.iter().filter(|r| r.kind == "vmlDrawing" && !r.external) {
+        let Some(doc) = imp.pkg.xml(&rel.target) else { continue };
+        let mut shapes = vec![];
+        doc.root.find_all("shape", &mut shapes);
+        let Some(img) = shapes.into_iter().find(|s| s.attr("id") == Some(spid)).and_then(|s| s.find("imagedata")) else { continue };
+        let Some(id) = img.attr("o:relid").or(img.attr("r:id")) else { continue };
+        let target = imp.pkg.rels(&rel.target).get(id).filter(|r| !r.external).map(|r| r.target.clone())?;
+        return imp.media_for(&target);
+    }
+    None
 }
 
 /// SmartArt: read the pre-drawn shapes of its drawing part as a group.

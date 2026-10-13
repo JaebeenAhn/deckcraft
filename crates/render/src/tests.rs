@@ -1059,7 +1059,8 @@ fn wordart_arch_up_lifts_the_middle_of_the_line() {
     // at the box top and the ends sit clearly lower.
     let (al, am, ar) = (top_near(&atops, ax0 + 20).unwrap(), top_near(&atops, (ax0 + ax1) / 2).unwrap(), top_near(&atops, ax1 - 20).unwrap());
     assert!(al > am + 10 && ar > am + 10, "arched {al} {am} {ar}");
-    assert!((80..=110).contains(&ay0), "arch top {ay0}");
+    // At the box top (y = 100), give or take the font: Linux's fallback face reaches 79.
+    assert!((70..=110).contains(&ay0), "arch top {ay0}");
 }
 
 #[test]
@@ -1095,5 +1096,482 @@ fn every_warp_preset_renders_text_inside_the_slide() {
         let img = render_slide(&p, 0, &o);
         let ((x0, y0, x1, y1), _) = ink(&img);
         assert!(x0 <= x1 && y0 <= y1, "{name}: no ink");
+    }
+}
+
+/// A placeable WMF, 2 × 1 inch (2880 × 1440 twips): a solid red brush and a rectangle over the
+/// left half, nothing on the right.
+fn half_red_wmf() -> Vec<u8> {
+    fn rec(func: u16, params: &[i16]) -> Vec<u8> {
+        let mut v = ((3 + params.len()) as u32).to_le_bytes().to_vec();
+        v.extend(func.to_le_bytes());
+        for p in params {
+            v.extend(p.to_le_bytes());
+        }
+        v
+    }
+    // CREATEBRUSHINDIRECT (solid, COLORREF 0x000000FF = red), SELECTOBJECT 0, RECTANGLE (bottom,
+    // right, top, left).
+    let body = [rec(0x02FC, &[0, 0xFF, 0, 0]), rec(0x012D, &[0]), rec(0x041B, &[1440, 1440, 0, 0]), rec(0, &[])].concat();
+    let mut f = 0x9AC6_CDD7u32.to_le_bytes().to_vec();
+    f.extend(0u16.to_le_bytes());
+    for v in [0i16, 0, 2880, 1440] {
+        f.extend(v.to_le_bytes());
+    }
+    f.extend(1440u16.to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(0u16.to_le_bytes());
+    let total = (f.len() + 18 + body.len()) / 2;
+    for v in [1u16, 9, 0x300] {
+        f.extend(v.to_le_bytes());
+    }
+    f.extend((total as u32).to_le_bytes());
+    f.extend(16u16.to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(0u16.to_le_bytes());
+    f.extend(body);
+    f
+}
+
+#[test]
+fn metafile_pictures_draw_their_vectors() {
+    let mut p = Presentation::default();
+    let media = p.add_media("image1.wmf", "image/x-wmf", half_red_wmf());
+    let fill = deckcraft_model::style::PictureFill { media, ..Default::default() };
+    let sh = Shape { id: ShapeId(600), xfrm: Some(Xfrm::new(100.0, 100.0, 400.0, 200.0)), kind: ShapeKind::Picture { fill }, ..Default::default() };
+    std::sync::Arc::make_mut(&mut p.slides[0]).shapes = vec![sh];
+    for scale in [0.5, 1.0, 3.0] {
+        let img = render_slide(&p, 0, &RenderOpts { scale, ..Default::default() });
+        let at = |x: f64, y: f64| img.pixel((x * scale) as u32, (y * scale) as u32);
+        let left = at(200.0, 200.0);
+        assert!(left[0] > 200 && left[1] < 60 && left[2] < 60, "left half red at {scale}: {left:?}");
+        let right = at(400.0, 200.0);
+        assert!(right[0] > 200 && right[1] > 200 && right[2] > 200, "right half empty at {scale}: {right:?}");
+    }
+}
+
+#[test]
+fn broken_metafiles_draw_nothing_and_never_panic() {
+    let wmf = half_red_wmf();
+    let mut cases: Vec<Vec<u8>> = (0..wmf.len()).step_by(3).map(|n| wmf[..n].to_vec()).collect();
+    cases.push(vec![1, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF]);
+    let mut huge = wmf.clone();
+    huge[10] = 0xFF;
+    huge[11] = 0x7F;
+    cases.push(huge);
+    for bytes in cases {
+        let mut p = Presentation::default();
+        let media = p.add_media("image1.emf", "image/x-emf", bytes);
+        let fill = deckcraft_model::style::PictureFill { media, ..Default::default() };
+        let sh = Shape { id: ShapeId(600), xfrm: Some(Xfrm::new(0.0, 0.0, 400.0, 200.0)), kind: ShapeKind::Picture { fill }, ..Default::default() };
+        std::sync::Arc::make_mut(&mut p.slides[0]).shapes = vec![sh];
+        let _ = render_slide(&p, 0, &RenderOpts { scale: 0.25, ..Default::default() });
+    }
+}
+
+#[test]
+fn an_object_deckcraft_doesnt_model_shows_its_preview_picture() {
+    // An embedded OLE object (or an unknown graphic) draws its preview stretched over its frame,
+    // as PowerPoint does; with no preview it draws nothing.
+    let png = {
+        let mut out = std::io::Cursor::new(vec![]);
+        image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(4, 2, image::Rgb([200, 20, 20])))
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    };
+    for with_preview in [true, false] {
+        let mut p = Presentation::default();
+        let media = p.add_media("image1.png", "image/png", png.clone());
+        let sh = Shape {
+            id: ShapeId(600),
+            xfrm: Some(Xfrm::new(100.0, 100.0, 400.0, 200.0)),
+            kind: ShapeKind::Opaque { xml: String::new(), preview: with_preview.then_some(media), label: "Package".into() },
+            ..Default::default()
+        };
+        std::sync::Arc::make_mut(&mut p.slides[0]).shapes = vec![sh];
+        let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+        for (x, y) in [(110, 110), (300, 200), (490, 290)] {
+            let px = img.pixel(x, y);
+            let red = px[0] > 180 && px[1] < 60 && px[2] < 60;
+            assert_eq!(red, with_preview, "({x}, {y}) {px:?}");
+        }
+        assert!(img.pixel(520, 200)[1] > 200, "nothing outside the frame");
+    }
+}
+
+/// #270: a filled shape half off the slide's left edge, and one wholly below it.
+fn off_slide_deck() -> Presentation {
+    let half = Shape {
+        id: ShapeId(2700),
+        xfrm: Some(Xfrm::new(-100.0, 100.0, 200.0, 100.0)),
+        style: Some(ShapeStyle::accent(deckcraft_color::SchemeSlot::Accent1)),
+        ..Default::default()
+    };
+    let below = Shape {
+        id: ShapeId(2701),
+        xfrm: Some(Xfrm::new(400.0, 600.0, 100.0, 60.0)),
+        style: Some(ShapeStyle::accent(deckcraft_color::SchemeSlot::Accent2)),
+        ..Default::default()
+    };
+    deck_with(vec![half, below])
+}
+
+fn near(px: [u8; 4], c: deckcraft_color::Rgba) -> bool {
+    (px[0] as i32 - c.r as i32).abs() <= 3 && (px[1] as i32 - c.g as i32).abs() <= 3 && (px[2] as i32 - c.b as i32).abs() <= 3 && px[3] == 255
+}
+
+#[test]
+fn shows_exports_and_thumbnails_clip_to_the_slide() {
+    let p = off_slide_deck();
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+    assert_eq!((img.width, img.height), (960, 540));
+    let a1 = p.masters[0].theme.colors.get(deckcraft_color::SchemeSlot::Accent1);
+    // The on-slide half is there, nothing else is drawn outside the slide.
+    assert!(near(img.pixel(50, 150), a1), "{:?}", img.pixel(50, 150));
+    assert_eq!(img.pixel(150, 150), [255, 255, 255, 255]);
+}
+
+#[test]
+fn the_editor_pasteboard_draws_shapes_off_the_slide() {
+    let p = off_slide_deck();
+    let extent = slide_extent(&p, 0);
+    let region = pasteboard_region((960, 540), 1.0, extent, Region { x: -300, y: -200, w: 1560, h: 1000 });
+    assert!(region.x <= -100 && region.y == 0 && region.y as i64 + region.h as i64 >= 660, "{region:?}");
+    let opts = RenderOpts { scale: 1.0, edit: true, offset: region.offset(), size: Some(region.size()), ..Default::default() };
+    let (img, drawn) = render_slide_drawn(&p, 0, &opts);
+    assert_eq!((img.width, img.height), region.size());
+    let at = |x: i32, y: i32| img.pixel((x - region.x) as u32, (y - region.y) as u32);
+    let a1 = p.masters[0].theme.colors.get(deckcraft_color::SchemeSlot::Accent1);
+    let a2 = p.masters[0].theme.colors.get(deckcraft_color::SchemeSlot::Accent2);
+    // Both halves of the straddling shape, at full strength, and the shape below the slide.
+    assert!(near(at(-50, 150), a1), "{:?}", at(-50, 150));
+    assert!(near(at(50, 150), a1), "{:?}", at(50, 150));
+    assert!(near(at(450, 630), a2), "{:?}", at(450, 630));
+    // The pasteboard itself stays clear (the UI's own colour shows through); the slide is white.
+    assert_eq!(at(-50, 50), [0, 0, 0, 0]);
+    assert_eq!(at(200, 300), [255, 255, 255, 255]);
+    // The drawing's reach, in slide space.
+    assert!(drawn.x0 <= -100.0 && drawn.y1 >= 660.0 && drawn.x1 >= 960.0, "{drawn:?}");
+}
+
+#[test]
+fn master_graphics_off_the_slide_show_on_the_pasteboard() {
+    let mut p = Presentation::default();
+    let m = std::sync::Arc::make_mut(&mut p.masters[0]);
+    m.shapes.push(Shape {
+        id: ShapeId(2702),
+        xfrm: Some(Xfrm::new(-150.0, 300.0, 100.0, 60.0)),
+        style: Some(ShapeStyle::accent(deckcraft_color::SchemeSlot::Accent3)),
+        ..Default::default()
+    });
+    let region = pasteboard_region((960, 540), 1.0, slide_extent(&p, 0), Region { x: -300, y: -100, w: 1500, h: 800 });
+    let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, edit: true, offset: region.offset(), size: Some(region.size()), ..Default::default() });
+    let a3 = p.masters[0].theme.colors.get(deckcraft_color::SchemeSlot::Accent3);
+    assert!(near(img.pixel((-100 - region.x) as u32, (330 - region.y) as u32), a3));
+}
+
+#[test]
+fn text_spilling_out_of_its_box_below_the_slide_is_reported() {
+    let mut sh = Shape { id: ShapeId(2703), xfrm: Some(Xfrm::new(100.0, 500.0, 400.0, 20.0)), ..Default::default() };
+    let mut t = TextBody::from_text("one\ntwo\nthree\nfour\nfive");
+    for para in &mut t.paragraphs {
+        for r in &mut para.runs {
+            r.props.size = Some(40.0);
+        }
+    }
+    sh.text = Some(t);
+    let p = deck_with(vec![sh]);
+    // The box estimate doesn't see the text below the slide; the render does.
+    assert!(slide_extent(&p, 0).y1 <= 540.0 + 4.0);
+    let (_, drawn) = render_slide_drawn(&p, 0, &RenderOpts { scale: 0.5, ..Default::default() });
+    assert!(drawn.y1 > 600.0, "{drawn:?}");
+    // A slide with nothing off it reaches just the slide.
+    let (_, drawn) = render_slide_drawn(&Presentation::default(), 0, &RenderOpts { scale: 0.5, edit: true, ..Default::default() });
+    assert_eq!(drawn, Rect::new(0.0, 0.0, 960.0, 540.0));
+}
+
+/// A placeable WMF (1440 units per inch, bounds `w` × `h`) holding `records` (function, parameter
+/// bytes).
+fn wmf_with(w: i16, h: i16, records: &[(u16, Vec<u8>)]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for (func, params) in records {
+        let mut p = params.clone();
+        if p.len() % 2 == 1 {
+            p.push(0);
+        }
+        body.extend(((6 + p.len()) as u32 / 2).to_le_bytes());
+        body.extend(func.to_le_bytes());
+        body.extend(p);
+    }
+    body.extend([3, 0, 0, 0, 0, 0]);
+    let mut f = 0x9AC6_CDD7u32.to_le_bytes().to_vec();
+    f.extend(0u16.to_le_bytes());
+    for v in [0i16, 0, w, h] {
+        f.extend(v.to_le_bytes());
+    }
+    f.extend(1440u16.to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(0u16.to_le_bytes());
+    let total = (f.len() + 18 + body.len()) / 2;
+    for v in [1u16, 9, 0x300] {
+        f.extend(v.to_le_bytes());
+    }
+    f.extend((total as u32).to_le_bytes());
+    f.extend(16u16.to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(0u16.to_le_bytes());
+    f.extend(body);
+    f
+}
+
+fn i16s(v: &[i32]) -> Vec<u8> {
+    v.iter().flat_map(|x| (*x as i16).to_le_bytes()).collect()
+}
+
+/// CREATEFONTINDIRECT (height, escapement, face) then SELECTOBJECT of it (handle 0), transparent
+/// background, and the alignment `ta`.
+fn font_records(height: i32, esc: i32, face: &str, ta: i32) -> Vec<(u16, Vec<u8>)> {
+    let mut f = i16s(&[height, 0, esc, esc, 400]);
+    f.extend([0, 0, 0, if face.contains("dings") { 2 } else { 0 }, 0, 0, 0, 0]);
+    f.extend(face.as_bytes());
+    f.push(0);
+    vec![(0x02FB, f), (0x012D, i16s(&[0])), (0x0102, i16s(&[1])), (0x012E, i16s(&[ta]))]
+}
+
+/// EXTTEXTOUT at (x, y) with an optional dx array.
+fn text_record(x: i32, y: i32, s: &str, dx: &[i32]) -> (u16, Vec<u8>) {
+    let mut v = i16s(&[y, x, s.len() as i32, 0]);
+    v.extend(s.as_bytes());
+    if s.len() % 2 == 1 {
+        v.push(0);
+    }
+    v.extend(i16s(dx));
+    (0x0A32, v)
+}
+
+/// Bounding box (x0, y0, x1, y1) of the pixels at least half opaque and darker than mid-grey.
+fn mf_ink(img: &image::RgbaImage) -> Option<(u32, u32, u32, u32)> {
+    let mut b: Option<(u32, u32, u32, u32)> = None;
+    for (x, y, p) in img.enumerate_pixels() {
+        if p[3] > 128 && (p[0] as u32 + p[1] as u32 + p[2] as u32) < 384 {
+            b = Some(match b {
+                None => (x, y, x, y),
+                Some((a, c, d, e)) => (a.min(x), c.min(y), d.max(x), e.max(y)),
+            });
+        }
+    }
+    b
+}
+
+#[test]
+fn metafile_text_ink_lands_at_its_reference_point() {
+    // 2 × 1 inch (144 × 72 pt) drawn 288 px wide: 2 px per point. A 36-point "HH", top-left
+    // aligned at (72, 18) pt.
+    let mut recs = font_records(-720, 0, "Arial", 0);
+    recs.push(text_record(1440, 360, "HH", &[]));
+    let img = crate::metafile::rasterize(&wmf_with(2880, 1440, &recs), 288).expect("raster");
+    let (x0, y0, x1, y1) = mf_ink(&img).expect("text ink");
+    assert!((144..156).contains(&x0), "left edge at the reference point: {x0}");
+    assert!(x1 > x0 + 40 && x1 < 288, "two capitals wide: {x1}");
+    // The cell's top is at 36 px; a capital starts below the cell top and sits on the baseline.
+    assert!((38..72).contains(&y0), "cap top below the cell top: {y0}");
+    assert!((88..112).contains(&y1), "baseline one ascent below the top: {y1}");
+}
+
+#[test]
+fn metafile_text_centre_baseline_and_escapement() {
+    // TA_CENTER | TA_BASELINE at (72, 36) pt: the ink is centred on 144 px and sits on 72 px.
+    let mut recs = font_records(-720, 0, "Arial", 24 | 6);
+    recs.push(text_record(1440, 720, "HH", &[]));
+    let img = crate::metafile::rasterize(&wmf_with(2880, 1440, &recs), 288).expect("raster");
+    let (x0, _, x1, y1) = mf_ink(&img).expect("ink");
+    assert!(((x0 + x1) as i32 / 2 - 144).abs() <= 4, "centred: {x0}..{x1}");
+    assert!((69..=74).contains(&y1), "on the baseline: {y1}");
+    // Escapement 90°: the string runs up the picture.
+    let mut recs = font_records(-360, 900, "Arial", 24);
+    recs.push(text_record(1440, 1300, "HHHH", &[]));
+    let img = crate::metafile::rasterize(&wmf_with(2880, 1440, &recs), 288).expect("raster");
+    let (x0, y0, x1, y1) = mf_ink(&img).expect("ink");
+    assert!(y1 - y0 > 2 * (x1 - x0), "a vertical run: {x0} {y0} {x1} {y1}");
+    assert!(x1 <= 146 && y1 <= 132, "drawn up and left of the baseline origin (144, 130): {x1} {y1}");
+}
+
+#[test]
+fn metafile_text_follows_its_dx_array() {
+    // "HH" with the second H a full inch (144 px) after the first: two clumps of ink, a gap between.
+    let mut recs = font_records(-360, 0, "Arial", 24);
+    recs.push(text_record(360, 720, "HH", &[1440, 100]));
+    let img = crate::metafile::rasterize(&wmf_with(2880, 1440, &recs), 288).expect("raster");
+    let col_has_ink = |x: u32| (0..img.height()).any(|y| img.get_pixel(x, y)[3] > 128);
+    assert!((36..56).any(col_has_ink), "first H at 36 px");
+    assert!((180..200).any(col_has_ink), "second H one inch later");
+    assert!(!(70..170).any(col_has_ink), "nothing between them");
+}
+
+#[test]
+fn metafile_symbol_text_draws_a_bullet_not_a_box() {
+    // Webdings "n" is a filled circle (installed, or mapped to a black circle where it is not), as
+    // is Wingdings "l" in a symbol font that is not installed anywhere.
+    for (face, s) in [("Webdings", "n"), ("Wingdings Not Installed", "l")] {
+        let mut recs = font_records(-1080, 0, face, 0);
+        recs.push(text_record(360, 0, s, &[]));
+        let img = crate::metafile::rasterize(&wmf_with(2880, 1440, &recs), 288).expect("raster");
+        let (x0, y0, x1, y1) = mf_ink(&img).expect("ink");
+        assert!(x1 - x0 > 10 && y1 - y0 > 10, "{face}: a sizeable mark: {x0} {y0} {x1} {y1}");
+        let (cx, cy) = ((x0 + x1) / 2, (y0 + y1) / 2);
+        assert!(img.get_pixel(cx, cy)[3] > 200, "{face}: filled in the middle");
+        for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
+            assert!(img.get_pixel(x, y)[3] < 128, "{face}: round, not a box: corner ({x}, {y})");
+        }
+    }
+}
+
+#[test]
+fn metafile_opaque_text_fills_its_cell() {
+    // OPAQUE background in red behind a space.
+    let mut recs = font_records(-720, 0, "Arial", 0);
+    recs.push((0x0102, i16s(&[2])));
+    recs.push((0x0201, 0x0000_00FFu32.to_le_bytes().to_vec()));
+    recs.push(text_record(1440, 360, " ", &[]));
+    let img = crate::metafile::rasterize(&wmf_with(2880, 1440, &recs), 288).expect("raster");
+    let p = img.get_pixel(148, 60);
+    assert!(p[0] > 200 && p[1] < 60 && p[3] > 200, "cell filled red: {p:?}");
+    assert!(img.get_pixel(140, 60)[3] < 50, "nothing left of the cell");
+}
+
+#[test]
+fn metafile_pattern_brush_tiles_and_averages_when_tiny() {
+    // A 1-bit 8 × 8 checker (palette white, black), a null pen and a one-inch square.
+    let mut dib: Vec<u8> = [40u32, 8, 8].iter().flat_map(|v| v.to_le_bytes()).collect();
+    dib.extend(1u16.to_le_bytes());
+    dib.extend(1u16.to_le_bytes());
+    dib.extend([0u8; 24]);
+    dib.extend([255, 255, 255, 0, 0, 0, 0, 0]);
+    for r in 0..8 {
+        dib.extend([if r % 2 == 0 { 0x55 } else { 0xAA }, 0, 0, 0]);
+    }
+    let mut brush = i16s(&[5, 0]);
+    brush.extend(dib);
+    let recs = vec![(0x0142, brush), (0x012D, i16s(&[0])), (0x012D, i16s(&[0x8008])), (0x041B, i16s(&[1440, 1440, 0, 0]))];
+    let bytes = wmf_with(1440, 1440, &recs);
+    // 4 px per point: a 0.75 pt cell is 3 px.
+    let img = crate::metafile::rasterize(&bytes, 288).expect("raster");
+    let (a, b) = (img.get_pixel(1, 1), img.get_pixel(4, 1));
+    assert!(a[3] > 200 && b[3] > 200);
+    assert!((a[0] as i32 - b[0] as i32).abs() > 200, "neighbouring cells alternate: {a:?} {b:?}");
+    // Far below one pixel per cell: the average grey.
+    let img = crate::metafile::rasterize(&bytes, 32).expect("raster");
+    let p = img.get_pixel(16, 16);
+    assert!((100..156).contains(&p[0]) && p[3] > 200, "average grey: {p:?}");
+}
+
+/// A 400 x 200 group at (100, 100) holding a dashed 4 pt rectangle and a 3 pt line with an
+/// arrowhead, placed in the group's child coordinates by `to_child` (slide point to child point).
+fn outlined_group(child: Xfrm, to_child: impl Fn(f64, f64) -> (f64, f64)) -> Image {
+    use deckcraft_model::style::{Dash, LineEnd};
+    let ink = |w: f64| deckcraft_model::style::Line { dash: None, ..deckcraft_model::style::Line::solid(ColorRef::rgb(Rgba::rgb(200, 0, 0)), w) };
+    let place = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        let ((a, b), (c, d)) = (to_child(x0, y0), to_child(x1, y1));
+        Xfrm::new(a, b, c - a, d - b)
+    };
+    let rect = Shape {
+        id: ShapeId(11),
+        xfrm: Some(place(140.0, 120.0, 300.0, 200.0)),
+        geom: Geom::preset("rect"),
+        line: Some(deckcraft_model::style::Line { dash: Some(Dash::Preset { name: "dash".into() }), ..ink(4.0) }),
+        ..Default::default()
+    };
+    let end = LineEnd { kind: "triangle".into(), w: "lg".into(), len: "lg".into() };
+    let line = Shape {
+        id: ShapeId(12),
+        xfrm: Some(Xfrm { flip_v: true, ..place(150.0, 170.0, 450.0, 260.0) }),
+        geom: Geom::preset("line"),
+        line: Some(deckcraft_model::style::Line { tail: Some(end), ..ink(3.0) }),
+        ..Default::default()
+    };
+    let pts: Vec<(f64, f64, f32)> = [(160.0, 240.0), (260.0, 285.0)].iter().map(|(x, y)| to_child(*x, *y)).map(|(x, y)| (x, y, 1.0)).collect();
+    let ink = Shape {
+        id: ShapeId(13),
+        xfrm: Some(place(100.0, 100.0, 500.0, 300.0)),
+        kind: ShapeKind::Ink {
+            strokes: vec![deckcraft_model::InkStroke { points: pts, color: Rgba::rgb(200, 0, 0), width: 5.0, highlighter: false }],
+        },
+        ..Default::default()
+    };
+    let group = Shape {
+        id: ShapeId(10),
+        xfrm: Some(Xfrm::new(100.0, 100.0, 400.0, 200.0)),
+        kind: ShapeKind::Group { children: vec![rect, line, ink], child },
+        ..Default::default()
+    };
+    render_slide(&deck_with(vec![group]), 0, &RenderOpts { scale: 1.0, ..Default::default() })
+}
+
+fn inked(img: &Image) -> usize {
+    img.pixels.as_chunks::<4>().0.iter().filter(|px| px[1] < 200).count()
+}
+
+#[test]
+fn group_child_scale_does_not_scale_line_widths() {
+    // Children laid out 1:1 with the slide are the reference.
+    let reference = outlined_group(Xfrm::new(100.0, 100.0, 400.0, 200.0), |x, y| (x, y));
+    let drawn = inked(&reference);
+    assert!((500..20_000).contains(&drawn), "the reference draws thin lines: {drawn}");
+    // The same drawing in a small legacy child space (scale 100), and one scaled unevenly
+    // (100 across, 50 down): same outlines, same line widths, dashes and arrowhead.
+    let uniform = outlined_group(Xfrm::new(1.0, 1.0, 4.0, 2.0), |x, y| (1.0 + (x - 100.0) / 100.0, 1.0 + (y - 100.0) / 100.0));
+    let uneven = outlined_group(Xfrm::new(1.0, 1.0, 4.0, 4.0), |x, y| (1.0 + (x - 100.0) / 100.0, 1.0 + (y - 100.0) / 50.0));
+    for (name, img) in [("uniform", &uniform), ("uneven", &uneven)] {
+        let (n, d) = (inked(img), differing(&reference, img));
+        assert!(n.abs_diff(drawn) * 20 < drawn, "{name}: {n} inked pixels against {drawn}");
+        assert!(d * 20 < drawn, "{name}: {d} differing values against {drawn} inked pixels");
+    }
+}
+
+#[test]
+fn a_picture_casts_its_shadow_from_its_pixels() {
+    // PowerPoint shades only where a picture paints: a logo on a transparent background casts the
+    // logo's shadow, not its frame's. Here the left half of the image is transparent.
+    let png = {
+        let img = image::RgbaImage::from_fn(8, 4, |x, _| if x < 4 { image::Rgba([0, 0, 0, 0]) } else { image::Rgba([20, 160, 20, 255]) });
+        let mut out = std::io::Cursor::new(vec![]);
+        image::DynamicImage::ImageRgba8(img).write_to(&mut out, image::ImageFormat::Png).unwrap();
+        out.into_inner()
+    };
+    let shadow = deckcraft_model::style::Shadow {
+        color: ColorRef::rgb(deckcraft_color::Rgba::BLACK),
+        blur: 0.0,
+        dist: 20.0,
+        dir: 90.0,
+        inner: false,
+        sx: 1.0,
+        sy: 1.0,
+        kx: 0.0,
+        ky: 0.0,
+        align: String::new(),
+        rotate_with_shape: false,
+    };
+    for as_fill in [false, true] {
+        let mut p = Presentation::default();
+        let media = p.add_media("logo.png", "image/png", png.clone());
+        let pf = deckcraft_model::style::PictureFill { media, ..Default::default() };
+        let mut sh = Shape { id: ShapeId(600), xfrm: Some(Xfrm::new(100.0, 100.0, 400.0, 200.0)), ..Default::default() };
+        if as_fill {
+            sh.fill = Some(Fill::Picture(pf));
+            sh.line = Some(deckcraft_model::style::Line { fill: Some(Fill::None), ..Default::default() });
+        } else {
+            sh.kind = ShapeKind::Picture { fill: pf };
+        }
+        sh.effects = Some(deckcraft_model::Effects { outer_shadow: Some(shadow.clone()), ..Default::default() });
+        std::sync::Arc::make_mut(&mut p.slides[0]).shapes = vec![sh];
+        let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
+        // Below the picture, 10 pt down: shadow under the opaque right half only.
+        let left = img.pixel(200, 310);
+        let right = img.pixel(400, 310);
+        assert!(left[0] > 240, "no shadow under the transparent half ({as_fill}): {left:?}");
+        assert!(right[0] < 40, "shadow under the opaque half ({as_fill}): {right:?}");
+        // The transparent half shows the slide, not a shadow behind it.
+        assert!(img.pixel(200, 200)[0] > 240, "{as_fill}");
     }
 }

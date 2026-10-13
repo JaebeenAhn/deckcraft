@@ -151,6 +151,36 @@ fn caret_and_hit_roundtrip() {
     assert_eq!(r.len(), 1);
 }
 
+/// #101: the text an input method is composing is underlined in place, under the baseline of each
+/// line it occupies, and only over the composed characters.
+#[test]
+fn composition_is_underlined_per_line() {
+    let (p, sh) = setup("Hello 한국어 world", 600.0, 100.0);
+    let l = lay(&p, &sh, 600.0, 100.0);
+    let (a, b) = (Pos { para: 0, ch: 6 }, Pos { para: 0, ch: 9 });
+    let u = l.composition_underlines(a, b);
+    assert_eq!(u.len(), 1, "{u:?}");
+    let (x0, x1, y) = u[0];
+    let (cx0, ..) = l.caret(a).unwrap();
+    let (cx1, ..) = l.caret(b).unwrap();
+    assert!((x0 - cx0).abs() < 0.01 && (x1 - cx1).abs() < 0.01, "{u:?} vs carets {cx0} {cx1}");
+    let line = &l.lines[0];
+    assert!(y > line.baseline && y <= line.bottom, "under the baseline: {y} ({} – {})", line.baseline, line.bottom);
+    // Reversed ends give the same; an empty composition, nothing.
+    assert_eq!(l.composition_underlines(b, a), u);
+    assert!(l.composition_underlines(a, a).is_empty());
+
+    // Wrapped: one underline per line.
+    let (p, sh) = setup("가나다라마바사아자차카타파하 가나다라마바사아자차카타파하 가나다라마바사", 120.0, 400.0);
+    let l = lay(&p, &sh, 120.0, 400.0);
+    assert!(l.lines.len() >= 2);
+    let u = l.composition_underlines(Pos { para: 0, ch: 0 }, Pos { para: 0, ch: 40 });
+    assert!(u.len() >= 2, "{u:?}");
+    assert!(u.windows(2).all(|w| w[1].2 > w[0].2), "each lower than the last: {u:?}");
+    // Positions past the text never panic.
+    let _ = l.composition_underlines(Pos { para: 3, ch: 0 }, Pos { para: 9, ch: 99 });
+}
+
 #[test]
 fn alignment_center_and_right() {
     let (p, mut sh) = setup("Hi", 400.0, 100.0);
@@ -717,4 +747,15 @@ fn an_installed_symbol_font_draws_its_own_bullet() {
     let face = db.face("Wingdings 2", "Regular");
     assert_eq!(symbol_font_char(&face, "\u{ea}", Some("Wingdings 2")), Some('\u{f0ea}'));
     assert_eq!(symbol_font_char(&face, "\u{ea}", Some("Arial")), None);
+}
+
+#[test]
+fn symbol_char_maps_symbol_font_codes() {
+    // Inter is not a symbol font, so the codes map to look-alikes.
+    let face = FontDb::global().face("Inter", "Regular");
+    assert_eq!(symbol_char(&face, "Arial", 'n'), None, "not a symbol font");
+    assert_eq!(symbol_char(&face, "Webdings", 'n'), Some('\u{25CF}'));
+    assert_eq!(symbol_char(&face, "Webdings", '\u{F06E}'), Some('\u{25CF}'), "the private-use form of the code");
+    assert_eq!(symbol_char(&face, "Wingdings", '\u{F06E}'), Some('\u{25A0}'));
+    assert_eq!(symbol_char(&face, "Wingdings", '\u{100}'), None, "not a symbol code");
 }

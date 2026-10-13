@@ -261,7 +261,7 @@ fn make_style(ctx: &Ctx, r: &RunProps, scale: f64, prompt: Option<Rgba>) -> Styl
     let family = resolve::font_family(ctx, r);
     let bold = r.bold.unwrap_or(false);
     let italic = r.italic.unwrap_or(false);
-    let face = FontDb::global().face(&family, style_name(bold, italic));
+    let face = FontDb::global().document_face(&family, style_name(bold, italic));
     let fake_bold = bold && face.weight < 550.0;
     let fake_italic = italic && !face.italic;
     let size = (r.size.unwrap_or(18.0) * scale).clamp(0.5, 4000.0);
@@ -773,9 +773,37 @@ fn symbol_font_char(face: &FontFace, c: &str, font: Option<&str>) -> Option<char
     }
 }
 
+/// The character that draws `c`, a character of text set in the symbol font `font` (Wingdings,
+/// Symbol, Webdings…: its code, or U+F000 + its code), with `face`: the installed symbol font's own
+/// glyph when `face` is that font, else a Unicode look-alike as bullets use. None when `font` is not
+/// a symbol font or `c` is not a symbol code. Metafile text takes this path.
+pub fn symbol_char(face: &FontFace, font: &str, c: char) -> Option<char> {
+    let code = c as u32;
+    if !is_symbol_font(font) || !(code < 0x100 || (0xF000..=0xF0FF).contains(&code)) {
+        return None;
+    }
+    let plain = char::from_u32(code & 0xFF)?;
+    let s = plain.to_string();
+    Some(symbol_font_char(face, &s, Some(font)).unwrap_or_else(|| map_symbol_bullet(&s, Some(font)).chars().next().unwrap_or('•')))
+}
+
 fn map_symbol_bullet(c: &str, font: Option<&str>) -> String {
     let f = font.unwrap_or("").to_ascii_lowercase();
     let first = c.chars().next().unwrap_or('•');
+    if f.starts_with("webdings") {
+        let m = match (first as u32) & 0xff {
+            0x6e => '●',
+            0x67 => '■',
+            0x61 => '✓',
+            0x72 => '✕',
+            0x33 => '◀',
+            0x34 => '▶',
+            0x35 => '▲',
+            0x36 => '▼',
+            _ => '•',
+        };
+        return m.to_string();
+    }
     if f.contains("wingdings") || f.contains("symbol") || ('\u{f000}'..='\u{f0ff}').contains(&first) {
         let code = (first as u32) & 0xff;
         // Wingdings 2 and 3 put different shapes at the same codes.
@@ -1831,25 +1859,98 @@ impl TextLayout {
         }
         out
     }
+    /// Underlines for text an input method is composing, from `a` to `b` (#101): `(x0, x1, y)` per
+    /// visual span, a little below each line's baseline (PowerPoint underlines the composition
+    /// in place). A composition that wraps gets one underline per line.
+    pub fn composition_underlines(&self, a: Pos, b: Pos) -> Vec<(f64, f64, f64)> {
+        let (s, e) = if a <= b { (a, b) } else { (b, a) };
+        let mut out = vec![];
+        if s == e {
+            return out;
+        }
+        for l in &self.lines {
+            let lp = Pos { para: l.para, ch: l.start };
+            let le = Pos { para: l.para, ch: l.end };
+            if le <= s || lp >= e {
+                continue;
+            }
+            let from = if s > lp { s.ch } else { l.start };
+            let to = if e < le { e.ch } else { l.end };
+            // Under the baseline, in the descent, never below the line.
+            let y = (l.baseline + (l.bottom - l.baseline) * 0.35).min(l.bottom);
+            for (x0, x1) in l.spans(from, to) {
+                if x1 > x0 {
+                    out.push((x0, x1, y));
+                }
+            }
+        }
+        out
+    }
     /// Vertical caret movement: the position on the line above/below closest to `x`.
     pub fn vertical(&self, pos: Pos, down: bool, x: f64) -> Pos {
-        let Some(li) = self.line_of(pos) else { return pos };
-        let target = if down { li + 1 } else { li.wrapping_sub(1) };
-        let Some(l) = self.lines.get(target) else { return pos };
+        self.vertical_affine(pos, Affinity::Downstream, down, x).0
+    }
+    /// The line a caret is on. An upstream caret at the start of a soft-wrapped line (where End
+    /// leaves it, after the previous line's trailing spaces) belongs to the line before.
+    pub fn line_index(&self, pos: Pos, affinity: Affinity) -> Option<usize> {
+        if affinity == Affinity::Upstream && pos.ch > 0 {
+            for (i, w) in self.lines.windows(2).enumerate() {
+                if let [a, b] = w
+                    && b.para == pos.para
+                    && a.para == pos.para
+                    && b.start == pos.ch
+                {
+                    return Some(i);
+                }
+            }
+        }
+        self.line_of_affine(pos, affinity)
+    }
+    /// Up/Down from a caret with its affinity: the position on the line above/below nearest `x`.
+    pub fn vertical_affine(&self, pos: Pos, affinity: Affinity, down: bool, x: f64) -> (Pos, Affinity) {
+        let Some(li) = self.line_index(pos, affinity) else { return (pos, affinity) };
+        let target = if down { li.checked_add(1) } else { li.checked_sub(1) };
+        let Some(l) = target.and_then(|t| self.lines.get(t)) else { return (pos, affinity) };
         let p = Point::new(x, (l.top + l.bottom) / 2.0);
         let mut h = self.hit(p);
         if h.para != l.para {
             h.para = l.para;
-            h.ch = h.ch.clamp(l.start, l.end);
         }
-        h
+        h.ch = h.ch.clamp(l.start, l.end);
+        (h, Affinity::Downstream)
     }
     /// Start/end of the visual line containing `pos` (logical: Home/End).
     pub fn line_bounds(&self, pos: Pos) -> (Pos, Pos) {
-        match self.line_of(pos).and_then(|i| self.lines.get(i)) {
+        self.line_bounds_affine(pos, Affinity::Downstream)
+    }
+    /// Start/end of the visual line a caret with this affinity is on.
+    pub fn line_bounds_affine(&self, pos: Pos, affinity: Affinity) -> (Pos, Pos) {
+        match self.line_index(pos, affinity).and_then(|i| self.lines.get(i)) {
             Some(l) => (Pos { para: l.para, ch: l.start }, Pos { para: l.para, ch: l.end }),
             None => (pos, pos),
         }
+    }
+    /// Where End puts the caret: after a soft wrap, past the line's trailing spaces at the start
+    /// of the next line with upstream affinity (so it is still drawn on this line), else the end
+    /// of the paragraph.
+    pub fn line_end_caret(&self, pos: Pos, affinity: Affinity) -> (Pos, Affinity) {
+        let Some(li) = self.line_index(pos, affinity) else { return (pos, Affinity::Downstream) };
+        let Some(l) = self.lines.get(li) else { return (pos, Affinity::Downstream) };
+        match self.lines.get(li + 1) {
+            Some(n) if n.para == l.para && n.start > l.start => (Pos { para: l.para, ch: n.start }, Affinity::Upstream),
+            _ => (Pos { para: l.para, ch: l.end }, Affinity::Downstream),
+        }
+    }
+    /// The caret to draw (x, top, bottom): an upstream caret after a soft wrap is drawn at the end
+    /// of the line it belongs to.
+    pub fn caret_drawn(&self, pos: Pos, affinity: Affinity) -> Option<(f64, f64, f64)> {
+        let li = self.line_index(pos, affinity)?;
+        let l = self.lines.get(li)?;
+        if pos.ch > l.end {
+            let x = l.caret_x.last().copied()?;
+            return Some((x, l.top, l.bottom));
+        }
+        self.caret_at(pos, affinity)
     }
     /// Bounding box of all glyphs/lines (shape-local).
     pub fn bounds(&self) -> Rect {
