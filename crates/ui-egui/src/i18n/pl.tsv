@@ -1255,6 +1255,7 @@ Arrow: Curved Left	Strzałka: zakrzywiona w lewo
 Arrow: Curved Right	Strzałka: zakrzywiona w prawo
 Arrow: Curved Up	Strzałka: zakrzywiona w górę
 Arrow: Swoosh	Strzałka: łukowa
+Artistic Effects	Efekty artystyczne
 Bean	Fasola
 Black and White: 25%	Czarno-białe: 25%
 Black and White: 50%	Czarno-białe: 50%
@@ -1321,12 +1322,14 @@ Double Right	Podwójnie do prawej
 Edit Photo Album…	Edytuj album fotograficzny…
 Edit Points	Edytuj punkty
 Edit SmartArt Text	Edytuj tekst grafiki SmartArt
+Enter a zoom percent	Wpisz procent powiększenia
 Fonts in Presentation	Czcionki w prezentacji
 Football	Piłka owalna
 From Bottom-Left	Od lewego dolnego rogu
 From Bottom-Right	Od prawego dolnego rogu
 From Top-Left	Od lewego górnego rogu
 From Top-Right	Od prawego górnego rogu
+Handout Placeholders	Symbole zastępcze materiałów informacyjnych
 Heartbeat	Bicie serca
 Hexagons From Bottom	Sześciokąty od dołu
 Hexagons From Left	Sześciokąty od lewej
@@ -1339,6 +1342,7 @@ Icon Gallery	Galeria ikon
 In with Bounce	Do środka z odbiciem
 Insert Picture in SmartArt	Wstaw obraz do grafiki SmartArt
 Insert Picture in SmartArt…	Wstaw obraz do grafiki SmartArt…
+Layout Placeholders	Symbole zastępcze układu
 Loop de Loop	Pętla w pętli
 Move Handle	Przesuń uchwyt
 Move Point	Przesuń punkt
@@ -1348,6 +1352,7 @@ Next Comment	Następny komentarz
 No comments.	Brak komentarzy.
 No icons match.	Brak pasujących ikon.
 No Recolor	Bez zmiany koloru
+Notes Placeholders	Symbole zastępcze notatek
 Office Theme	Motyw pakietu Office
 Out with Bounce	Na zewnątrz z odbiciem
 Particles In	Cząsteczki do środka
@@ -1355,12 +1360,14 @@ Particles Out	Cząsteczki na zewnątrz
 Paste Special	Wklej specjalnie
 Paste Special…	Wklej specjalnie…
 Peanut	Orzeszek ziemny
+Percent:	Procent:
 Photo Album…	Album fotograficzny…
 Pick a design for this slide. Ideas are generated on your device.	Wybierz projekt dla tego slajdu. Pomysły są generowane na Twoim urządzeniu.
 Picture Border	Obramowanie obrazu
 Picture Style Gallery	Galeria stylów obrazu
 Point Type	Typ punktu
 Points	Punkty
+Preserve	Zachowaj
 Previous Comment	Poprzedni komentarz
 Promote	Podwyższ poziom
 Recolor	Zmień kolor
@@ -1372,6 +1379,7 @@ S Curve 1	Krzywa S 1
 S Curve 2	Krzywa S 2
 Sepia	Sepia
 Set Transparent Color	Ustaw kolor przezroczysty
+Set Zoom	Ustaw powiększenie
 Sine Wave	Sinusoida
 Single Left	Pojedynczo do lewej
 Single Right	Pojedynczo do prawej
@@ -1400,6 +1408,7 @@ Vertical Out	Pionowo na zewnątrz
 Washout	Rozjaśnienie
 Zigzag	Zygzak
 Zoom and Rotate	Powiększenie i obrót
+Zoom to	Powiększ do
 circle	okrąg
 diamond	romb
 plus	plus

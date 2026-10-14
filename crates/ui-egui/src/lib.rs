@@ -99,6 +99,8 @@ pub struct UiState {
     pub pane_width: f32,
     pub ruler: bool,
     pub gridlines: bool,
+    /// Slides per page previewed in Handout Master view (1, 2, 3, 4, 6 or 9).
+    pub handout_per_page: u8,
     pub guides: bool,
     pub smart_guides: bool,
     /// None = fit to window.
@@ -136,6 +138,7 @@ impl Default for UiState {
             pane_width: 300.0,
             ruler: false,
             gridlines: false,
+            handout_per_page: 6,
             guides: false,
             smart_guides: true,
             zoom: None,
@@ -177,7 +180,8 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("view.guides", "Guides", Some("Alt+F9"), "{on?: bool}"),
     ("view.zoomIn", "Zoom In", Some("Cmd+="), "{}"),
     ("view.zoomOut", "Zoom Out", Some("Cmd+-"), "{}"),
-    ("view.zoom", "Zoom…", None, "{percent}"),
+    ("view.zoom", "Set Zoom", None, "{percent}"),
+    ("view.zoomDialog", "Zoom…", None, "{}"),
     ("view.fit", "Fit to Window", None, "{}"),
     ("view.pane", "Task Pane", None, "{pane: format|animation|selection|comments|designer|background|smartart|null}"),
     ("view.tab", "Ribbon Tab", None, "{tab}"),
@@ -185,7 +189,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("view.dark", "Dark Mode", None, "{on?: bool}"),
     ("view.grayscale", "Grayscale", None, "{on?: bool}"),
     ("view.newWindow", "New Window", None, "{on?: bool, slide?: index, delta?: int}"),
-    ("show.start", "Slide Show", Some("F5"), "{from?: index}"),
+    ("show.start", "Slide Show", Some("F5"), "{from?: index, custom?: name}"),
     ("show.presenter", "Presenter View", None, "{on?: bool}"),
     ("show.end", "End Show", None, "{}"),
     ("app.home", "Home", None, "{on?}"),
@@ -466,8 +470,10 @@ impl SlideApp {
         let Some(doc) = self.session.active().map(|d| d.doc.clone()) else { return false };
         let bytes = match format {
             "png" | "jpeg" => {
-                let img = deckcraft_render::render_slide(&doc, slide, &deckcraft_render::RenderOpts { scale: 2.0, ..Default::default() });
-                Ok(if format == "png" { img.to_png() } else { img.to_jpeg(92) })
+                let scale = 2.0;
+                let img = deckcraft_render::render_slide(&doc, slide, &deckcraft_render::RenderOpts { scale, ..Default::default() });
+                let dpi = deckcraft_render::dpi_for_scale(scale);
+                Ok(if format == "png" { img.to_png_at(dpi) } else { img.to_jpeg_at(92, Some(dpi)) })
             }
             "pdf" => deckcraft_engine::cmd::file::pdf_bytes(&doc, &extra),
             other => deckcraft_engine::cmd::file::save_bytes(&doc, other),
@@ -550,6 +556,7 @@ impl SlideApp {
                 let pct = p.get("percent").and_then(Value::as_f64).ok_or("missing `percent`")?;
                 self.ui.zoom = Some((pct as f32 / 100.0).clamp(0.1, 4.0));
             }
+            "view.zoomDialog" => self.dialog = Some(dialogs::Dialog::new("zoom")),
             "view.fit" => self.ui.zoom = None,
             "view.pane" => {
                 let pane = p.get("pane").and_then(Value::as_str).map(String::from);
@@ -573,8 +580,14 @@ impl SlideApp {
             "view.grayscale" => self.ui.grayscale = self.flag(p, self.ui.grayscale),
             "view.newWindow" => return doc_window::command(self, p),
             "show.start" => {
-                let from = p.get("from").and_then(Value::as_u64).map(|v| v as usize).unwrap_or(0);
-                self.start_show(from, false);
+                if let Some(name) = p.get("custom").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                    self.start_custom_show(name, false);
+                } else if p.get("from").is_some() {
+                    let from = p.get("from").and_then(Value::as_u64).map(|v| v as usize).unwrap_or(0);
+                    self.start_show(from, false);
+                } else {
+                    self.start_show(self.show_start_index(), false);
+                }
             }
             "show.presenter" => self.ui.presenter_view = self.flag(p, self.ui.presenter_view),
             "show.end" => {
@@ -668,10 +681,26 @@ impl SlideApp {
         self.ui.view == ViewMode::Sorter || (self.ui.view == ViewMode::Normal && self.slides_focused)
     }
 
+    /// First slide Play from Start should open: the custom show or range, skipping hidden slides.
+    pub fn show_start_index(&self) -> usize {
+        self.session.active().and_then(|d| deckcraft_anim::show_order(&d.doc).first().copied()).unwrap_or(0)
+    }
+
     pub fn start_show(&mut self, from: usize, reading: bool) {
         self.media.stop_owned(media::Owner::Editor);
         if let Some(d) = self.session.active() {
             self.show = Some(show::Show::new(&d.doc, from, reading, self.ui.presenter_view && !reading));
+        }
+    }
+
+    /// Play custom show `name` from its first slide. Set Up Slide Show is left as it was.
+    pub fn start_custom_show(&mut self, name: &str, reading: bool) {
+        let state = self.session.active().and_then(|d| deckcraft_anim::ShowState::play_custom(&d.doc, name));
+        let Some(state) = state else { return };
+        let from = state.slide;
+        self.start_show(from, reading);
+        if let Some(show) = self.show.as_mut() {
+            show.state = state;
         }
     }
 
@@ -802,8 +831,8 @@ impl SlideApp {
                 }
                 UiRequest::Media { action, shape, ms } => {
                     let owner = if self.show.is_some() { media::Owner::Show } else { media::Owner::Editor };
-                    if let Some(doc) = self.session.active().map(|d| d.doc.clone()) {
-                        self.media.request(&doc, &action, shape, ms, owner);
+                    if let Some((uid, doc)) = self.session.active().map(|d| (d.uid, d.doc.clone())) {
+                        self.media.request(uid, &doc, &action, shape, ms, owner);
                     }
                 }
             }
@@ -1139,8 +1168,11 @@ impl SlideApp {
         self.perf.frame_ms = now_ms() - t0;
     }
 
-    /// Media clocks and video textures; the editor's media stops when its slide is left.
+    /// Media clocks and video textures. Voices belong to the open presentation: closing the last
+    /// one, or switching decks, stops them. The editor's media also stops when its slide is left.
     fn tick_media(&mut self, ctx: &egui::Context) {
+        let uid = self.session.active().map(|d| d.uid);
+        self.media.set_document(uid);
         if !self.media.any_active() {
             self.session.media_status.clear();
             return;

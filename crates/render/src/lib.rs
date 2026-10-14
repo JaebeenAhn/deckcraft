@@ -51,7 +51,7 @@ pub use extent::{Region, TILE, layout_extent, pasteboard_region, slide_extent};
 pub use images::{decode as decode_image, gif_frame};
 pub use morph_path::PathMorph;
 pub use morph_text::TextMorph;
-pub use placed::{Placed, PlacedLink, PlacedShape, PlacedText, place_slide, text_outline};
+pub use placed::{Placed, PlacedLink, PlacedShape, PlacedText, place_master_texts, place_slide, text_outline};
 pub use table::cell_body as table_cell_body;
 pub use table::cell_rects as table_cell_rects;
 pub use table::row_heights as table_row_heights;
@@ -106,12 +106,30 @@ impl Image {
         }
         buf
     }
+
+    /// PNG of this image whose `pHYs` chunk says `dpi` dots per inch.
+    ///
+    /// Slide space is points, 72 per inch, so a render at `scale` pixels per point is
+    /// [`dpi_for_scale`]`(scale)`. Without the chunk, Preview treats the pixels as 72 dpi and a
+    /// Retina (2×) export opens at twice the slide's size.
+    pub fn to_png_at(&self, dpi: f64) -> Vec<u8> {
+        images::stamp_png_dpi(&self.to_png(), dpi)
+    }
+
     pub fn to_jpeg(&self, quality: u8) -> Vec<u8> {
+        self.to_jpeg_at(quality, None)
+    }
+
+    /// JPEG of this image. `dpi` is stored as JFIF density in dots per inch when it is in range.
+    pub fn to_jpeg_at(&self, quality: u8, dpi: Option<f64>) -> Vec<u8> {
         let straight = self.to_straight();
         let rgb: Vec<u8> = straight.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
         let Some(img) = image::RgbImage::from_raw(self.width, self.height, rgb) else { return Vec::new() };
         let mut buf = Vec::new();
-        let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality.clamp(1, 100));
+        let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality.clamp(1, 100));
+        if let Some(d) = dpi.and_then(dpi_u16) {
+            enc.set_pixel_density(image::codecs::jpeg::PixelDensity::dpi(d));
+        }
         if let Err(e) = img.write_with_encoder(enc) {
             log::error!("JPEG encode: {e}");
             return Vec::new();
@@ -126,6 +144,29 @@ impl Image {
         let un = |c: u8| (c as u32 * 255 + a / 2).checked_div(a).map(|v| v.min(255) as u8).unwrap_or(0);
         [un(p[0]), un(p[1]), un(p[2]), a as u8]
     }
+}
+
+/// Dots per inch for a slide drawn at `pixels_per_point`.
+///
+/// A point is 1/72 inch. The default picture export uses 2 pixels per point, which is 144 dpi:
+/// the same pixels, at the slide's real size, on a Retina display.
+pub fn dpi_for_scale(pixels_per_point: f64) -> f64 {
+    if !pixels_per_point.is_finite() || pixels_per_point <= 0.0 {
+        return 72.0;
+    }
+    (pixels_per_point * 72.0).clamp(1.0, 10_000.0)
+}
+
+fn dpi_u16(dpi: f64) -> Option<u16> {
+    if !dpi.is_finite() || !(1.0..=f64::from(u16::MAX)).contains(&dpi) {
+        return None;
+    }
+    Some(dpi.round() as u16)
+}
+
+/// Resolution a PNG (`pHYs`) or JPEG (JFIF) records, in whole dots per inch.
+pub fn image_dpi(bytes: &[u8]) -> Option<(f64, f64)> {
+    images::dpi(bytes)
 }
 
 /// Animation state of one shape during a slide show or preview.

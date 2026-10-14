@@ -869,6 +869,67 @@ fn hyperlink_command(mode: &str, url: &str, email: &str, slide: usize, tip: &str
     }
 }
 
+/// Preset percents in the Zoom dialog, largest first.
+const ZOOM_PRESETS: &[u32] = &[400, 200, 150, 100, 75, 66, 50, 33];
+
+/// A typed zoom percent as a scale in `0.1..=4` (10%–400%). `None` when it is not a finite number.
+pub fn parse_zoom_percent(text: &str) -> Option<f32> {
+    let t = text.trim().trim_end_matches('%').trim();
+    if t.is_empty() {
+        return None;
+    }
+    let v = t.parse::<f64>().ok().filter(|n| n.is_finite())?;
+    Some(((v / 100.0) as f32).clamp(0.1, 4.0))
+}
+
+/// Zoom dialog: a percent or Fit. Nothing changes until OK.
+fn zoom_dialog(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
+    if !d.fields.contains_key("mode") {
+        let shown = app.ui.zoom.unwrap_or(app.canvas_scale);
+        let pct = if shown.is_finite() { (shown * 100.0).round().clamp(10.0, 400.0) } else { 100.0 };
+        d.fields.insert("mode".into(), if app.ui.zoom.is_none() { "fit".into() } else { "percent".into() });
+        d.fields.insert("percent".into(), format!("{pct:.0}"));
+    }
+    let mut mode = d.get("mode", "percent");
+    let mut percent = d.get("percent", "100");
+    ui.label(crate::i18n::tr("Zoom to"));
+    if ui.radio(mode == "fit", crate::i18n::tr("Fit")).clicked() {
+        mode = "fit".into();
+    }
+    for pct in ZOOM_PRESETS {
+        let on = mode == "percent" && percent == pct.to_string();
+        if ui.radio(on, format!("{pct}%")).clicked() {
+            mode = "percent".into();
+            percent = pct.to_string();
+        }
+    }
+    ui.horizontal(|ui| {
+        ui.label(crate::i18n::tr("Percent:"));
+        let edit = ui.add(egui::TextEdit::singleline(&mut percent).desired_width(72.0));
+        if edit.changed() {
+            mode = "percent".into();
+        }
+        ui.label("%");
+    });
+    d.fields.insert("mode".into(), mode.clone());
+    d.fields.insert("percent".into(), percent.clone());
+    let (ok, cancel) = buttons(ui, "OK");
+    if ok {
+        if mode == "fit" {
+            app.ui.zoom = None;
+            return true;
+        }
+        match parse_zoom_percent(&percent) {
+            Some(scale) => app.ui.zoom = Some(scale),
+            None => {
+                app.set_status(crate::i18n::tr("Enter a zoom percent"));
+                return false;
+            }
+        }
+    }
+    ok || cancel
+}
+
 /// Returns true when the dialog should close.
 fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let run = |app: &mut SlideApp, id: &str, p: Value| {
@@ -1017,10 +1078,25 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let nn = check(ui, d, "Show without narration", "nn", sh.without_narration);
             let na = check(ui, d, "Show without animation", "na", sh.without_animation);
             let ut = check(ui, d, "Use timings, if present", "ut", sh.use_timings);
+            let names: Vec<String> = app.session.active().map(|s| s.doc.custom_shows.iter().map(|c| c.name.clone()).collect()).unwrap_or_default();
+            let chosen = d.fields.entry("custom".into()).or_insert_with(|| sh.custom_show.clone().unwrap_or_default()).clone();
+            ui.label("Slides");
+            let label = if chosen.is_empty() { "All slides".to_string() } else { chosen.clone() };
+            egui::ComboBox::from_id_salt("setup_custom").selected_text(label).show_ui(ui, |ui| {
+                if ui.selectable_label(chosen.is_empty(), "All slides").clicked() {
+                    d.fields.insert("custom".into(), String::new());
+                }
+                for n in &names {
+                    if ui.selectable_label(&chosen == n, n).clicked() {
+                        d.fields.insert("custom".into(), n.clone());
+                    }
+                }
+            });
             let (ok, cancel) = buttons(ui, "OK");
             if ok {
                 let ty = d.get("type", "speaker");
-                run(app, "show.setup", json!({"type": ty, "loop": lp, "noNarration": nn, "noAnimation": na, "useTimings": ut}));
+                let custom = d.fields.get("custom").cloned().unwrap_or_default();
+                run(app, "show.setup", json!({"type": ty, "loop": lp, "noNarration": nn, "noAnimation": na, "useTimings": ut, "custom": custom}));
             }
             ok || cancel
         }
@@ -1106,18 +1182,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             });
             done
         }
-        "zoom" => {
-            for pct in [400, 200, 150, 100, 75, 66, 50, 33] {
-                if ui.radio(false, format!("{pct}%")).clicked() {
-                    let _ = app.run("view.zoom", json!({"percent": pct}));
-                }
-            }
-            if ui.button(crate::i18n::tr("Fit")).clicked() {
-                app.ui.zoom = None;
-            }
-            let (ok, cancel) = buttons(ui, "OK");
-            ok || cancel
-        }
+        "zoom" => zoom_dialog(app, ui, d),
         "comment" => {
             let mut v = d.get("text", "");
             ui.add(egui::TextEdit::multiline(&mut v).hint_text(crate::i18n::tr("Start a conversation")).desired_rows(4).desired_width(320.0));
@@ -1666,6 +1731,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         }
         "customShow" => {
             let shows = app.session.active().map(|s| s.doc.custom_shows.clone()).unwrap_or_default();
+            let mut started = false;
             for s in &shows {
                 ui.horizontal(|ui| {
                     ui.label(format!(
@@ -1678,10 +1744,17 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                             ["slajd", "slajdy", "slajdów"]
                         )
                     ));
+                    if ui.small_button(crate::i18n::tr("Show")).clicked() {
+                        run(app, "show.start", json!({"custom": s.name}));
+                        started = true;
+                    }
                     if ui.small_button(crate::i18n::tr("Delete")).clicked() {
                         let _ = app.run("show.customShow", json!({"name": s.name, "delete": true}));
                     }
                 });
+            }
+            if started {
+                return true;
             }
             field(ui, d, "New show name:", "name", "Custom Show 1");
             field(ui, d, "Slides (e.g. 1,3,5):", "slides", "1");
@@ -2453,5 +2526,27 @@ mod tests {
         st.selection.text = Some(deckcraft_engine::TextSel { shape: shape_id, anchor: (0, 11), caret: (0, 11), ..Default::default() });
         let seed = hyperlink_seed_of(Some(&st));
         assert_eq!(seed, HyperlinkSeed::blank(), "a caret at the end of the word inserts a new link");
+    }
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use super::parse_zoom_percent;
+
+    fn near(v: f32, want: f32) -> bool {
+        (v - want).abs() < 1.0e-4
+    }
+
+    #[test]
+    fn zoom_percent_accepts_a_number_and_clamps() {
+        assert!(parse_zoom_percent("150").is_some_and(|v| near(v, 1.5)));
+        assert!(parse_zoom_percent("150%").is_some_and(|v| near(v, 1.5)));
+        assert!(parse_zoom_percent("  100 ").is_some_and(|v| near(v, 1.0)));
+        assert!(parse_zoom_percent("1").is_some_and(|v| near(v, 0.1)));
+        assert!(parse_zoom_percent("900").is_some_and(|v| near(v, 4.0)));
+        assert!(parse_zoom_percent("").is_none());
+        assert!(parse_zoom_percent("fit").is_none());
+        assert!(parse_zoom_percent("nan").is_none());
+        assert!(parse_zoom_percent("inf").is_none());
     }
 }

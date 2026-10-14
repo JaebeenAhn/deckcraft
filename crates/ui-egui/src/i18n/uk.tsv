@@ -1254,6 +1254,7 @@ Arrow: Curved Left	Стрілка: Вигнута ліворуч
 Arrow: Curved Right	Стрілка: Вигнута праворуч
 Arrow: Curved Up	Стрілка: Вигнута вгору
 Arrow: Swoosh	Стрілка: Дугова
+Artistic Effects	Художні ефекти
 Bean	Квасоля
 Black and White: 25%	Чорно-білий: 25%
 Black and White: 50%	Чорно-білий: 50%
@@ -1320,12 +1321,14 @@ Double Right	Подвійно праворуч
 Edit Photo Album…	Змінити фотоальбом…
 Edit Points	Змінити точки
 Edit SmartArt Text	Змінити текст SmartArt
+Enter a zoom percent	Введіть відсоток масштабу
 Fonts in Presentation	Шрифти в презентації
 Football	Овальний м'яч
 From Bottom-Left	Із нижнього лівого кута
 From Bottom-Right	Із нижнього правого кута
 From Top-Left	Із верхнього лівого кута
 From Top-Right	Із верхнього правого кута
+Handout Placeholders	Заповнювачі роздаткових матеріалів
 Heartbeat	Серцебиття
 Hexagons From Bottom	Шестикутники знизу
 Hexagons From Left	Шестикутники зліва
@@ -1338,6 +1341,7 @@ Icon Gallery	Колекція піктограм
 In with Bounce	Усередину з відскоком
 Insert Picture in SmartArt	Вставити зображення в SmartArt
 Insert Picture in SmartArt…	Вставити зображення в SmartArt…
+Layout Placeholders	Заповнювачі макета
 Loop de Loop	Петля в петлі
 Move Handle	Перемістити маркер
 Move Point	Перемістити точку
@@ -1347,6 +1351,7 @@ Next Comment	Наступний коментар
 No comments.	Немає коментарів.
 No icons match.	Немає відповідних піктограм.
 No Recolor	Без перефарбування
+Notes Placeholders	Заповнювачі нотаток
 Office Theme	Тема Office
 Out with Bounce	Назовні з відскоком
 Particles In	Частинки всередину
@@ -1354,12 +1359,14 @@ Particles Out	Частинки назовні
 Paste Special	Спеціальне вставлення
 Paste Special…	Спеціальне вставлення…
 Peanut	Арахіс
+Percent:	Відсоток:
 Photo Album…	Фотоальбом…
 Pick a design for this slide. Ideas are generated on your device.	Виберіть оформлення для цього слайда. Ідеї створюються на вашому пристрої.
 Picture Border	Межа зображення
 Picture Style Gallery	Колекція стилів зображення
 Point Type	Тип точки
 Points	Точки
+Preserve	Зберегти
 Previous Comment	Попередній коментар
 Promote	Підвищити рівень
 Recolor	Перефарбувати
@@ -1371,6 +1378,7 @@ S Curve 1	S-крива 1
 S Curve 2	S-крива 2
 Sepia	Сепія
 Set Transparent Color	Установити прозорий колір
+Set Zoom	Установити масштаб
 Sine Wave	Синусоїда
 Single Left	Одинарно ліворуч
 Single Right	Одинарно праворуч
@@ -1399,6 +1407,7 @@ Vertical Out	Вертикально назовні
 Washout	Вицвітання
 Zigzag	Зигзаг
 Zoom and Rotate	Масштаб і обертання
+Zoom to	Масштабувати до
 circle	коло
 diamond	ромб
 plus	плюс

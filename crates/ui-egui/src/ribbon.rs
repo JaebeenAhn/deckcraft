@@ -63,7 +63,7 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
             run(app, "edit.redo", json!({}));
         }
         if icon_toggle(&mut child, Icon::PlayFromStart, "Play from Start (F5)", has_doc, false).clicked() {
-            app.start_show(0, false);
+            app.start_show(app.show_start_index(), false);
         }
         let title = app
             .session
@@ -112,7 +112,11 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
 fn contextual(app: &SlideApp) -> Vec<&'static str> {
     let mut v = vec![];
     let Some(st) = app.session.active() else { return v };
-    if st.selection.target != Target::Slides {
+    if st.selection.target == Target::Handout {
+        v.push("Handout Master");
+    } else if st.selection.target == Target::NotesMaster {
+        v.push("Notes Master");
+    } else if st.selection.target != Target::Slides {
         v.push("Slide Master");
     }
     let shapes = st.selected_shapes();
@@ -237,6 +241,8 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
             "SmartArt Design" => smartart_design(app, ui),
             "Playback" => playback(app, ui),
             "Slide Master" => slide_master(app, ui),
+            "Handout Master" => handout_master(app, ui),
+            "Notes Master" => notes_master(app, ui),
             _ => {}
         }
     });
@@ -1487,6 +1493,16 @@ fn design(app: &mut SlideApp, ui: &mut Ui) {
                 ui.close();
             }
         });
+        let r = big_button(ui, Icon::ShapeEffects, "Effects", true);
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Effects"));
+        egui::Popup::menu(&r).width(180.0).show(|ui| {
+            for fs in deckcraft_model::theme::builtin_format_schemes() {
+                if ui.button(&fs.name).clicked() {
+                    run(app, "design.effects", json!({"name": fs.name}));
+                    ui.close();
+                }
+            }
+        });
         let r = big_button(ui, Icon::BackgroundStyles, "Background\nStyles", true);
         egui::Popup::menu(&r).show(|ui| {
             egui::Grid::new("bgstyles").show(ui, |ui| {
@@ -1983,7 +1999,7 @@ pub fn paint_anim_tile(p: &egui::Painter, r: Rect, label: &str, class: AnimClass
 fn slide_show(app: &mut SlideApp, ui: &mut Ui) {
     group(ui, |ui| {
         if big_button(ui, Icon::PlayFromStart, "Play from\nStart", true).clicked() {
-            app.start_show(0, false);
+            app.start_show(app.show_start_index(), false);
         }
         if big_button(ui, Icon::PlayFromCurrent, "Play from\nCurrent Slide", true).clicked() {
             let i = app.session.active().map(|d| d.selection.slide).unwrap_or(0);
@@ -2004,7 +2020,7 @@ fn slide_show(app: &mut SlideApp, ui: &mut Ui) {
     });
     group(ui, |ui| {
         if big_button(ui, Icon::RehearseTimings, "Rehearse\nTimings", true).clicked() {
-            app.start_show(0, false);
+            app.start_show(app.show_start_index(), false);
             if let Some(s) = app.show.as_mut() {
                 s.rehearse = true;
             }
@@ -2023,7 +2039,9 @@ fn slide_show(app: &mut SlideApp, ui: &mut Ui) {
                 run(app, "show.setup", json!({"noNarration": !narr}));
             }
             let mut mc = app.session.active().is_none_or(|d| d.doc.show.show_media_controls);
-            let _ = ui.checkbox(&mut mc, crate::i18n::tr("Show Media Controls"));
+            if ui.checkbox(&mut mc, crate::i18n::tr("Show Media Controls")).changed() {
+                run(app, "show.setup", json!({"showMediaControls": mc}));
+            }
         });
     });
 }
@@ -2033,7 +2051,7 @@ fn record(app: &mut SlideApp, ui: &mut Ui) {
         let r = big_button(ui, Icon::Cameo, "Cameo", false);
         let _ = r.on_hover_text(crate::i18n::tr("Camera capture is not available yet"));
         if big_button(ui, Icon::PlayFromStart, "From\nBeginning", true).clicked() {
-            app.start_show(0, false);
+            app.start_show(app.show_start_index(), false);
             if let Some(s) = app.show.as_mut() {
                 s.rehearse = true;
             }
@@ -2119,10 +2137,14 @@ fn view(app: &mut SlideApp, ui: &mut Ui) {
         if big_button_ex(ui, Icon::SlideMaster, "Slide\nMaster", true, false, in_master).0.clicked() {
             let _ = app.run(if in_master { "view.closeMaster" } else { "view.slideMaster" }, json!({}));
         }
-        let r = big_button(ui, Icon::HandoutMaster, "Handout\nMaster", false);
-        let _ = r.on_hover_text(crate::i18n::tr("Handout Master (coming soon)"));
-        let r = big_button(ui, Icon::NotesMaster, "Notes\nMaster", false);
-        let _ = r.on_hover_text(crate::i18n::tr("Notes Master (coming soon)"));
+        let in_handout = app.session.active().is_some_and(|d| d.selection.target == Target::Handout);
+        if big_button_ex(ui, Icon::HandoutMaster, "Handout\nMaster", true, false, in_handout).0.clicked() {
+            let _ = app.run(if in_handout { "view.closeMaster" } else { "view.handoutMaster" }, json!({}));
+        }
+        let in_notes = app.session.active().is_some_and(|d| d.selection.target == Target::NotesMaster);
+        if big_button_ex(ui, Icon::NotesMaster, "Notes\nMaster", true, false, in_notes).0.clicked() {
+            let _ = app.run(if in_notes { "view.closeMaster" } else { "view.notesMaster" }, json!({}));
+        }
     });
     group(ui, |ui| {
         rows(ui, |ui| {
@@ -2145,14 +2167,24 @@ fn view(app: &mut SlideApp, ui: &mut Ui) {
         }
     });
     group(ui, |ui| {
-        let r = big_button(ui, Icon::ZoomGlass, "Zoom", true);
-        egui::Popup::menu(&r).show(|ui| {
-            for pct in [400, 200, 150, 100, 75, 66, 50, 33] {
-                if ui.button(format!("{pct}%")).clicked() {
-                    let _ = app.run("view.zoom", json!({"percent": pct}));
+        let (main, arrow) = big_button_ex(ui, Icon::ZoomGlass, "Zoom", true, true, false);
+        if main.on_hover_text("Zoom").clicked() {
+            let _ = app.run("view.zoomDialog", json!({}));
+        }
+        if let Some(a) = arrow {
+            egui::Popup::menu(&a).show(|ui| {
+                for pct in [400, 200, 150, 100, 75, 66, 50, 33] {
+                    if ui.button(format!("{pct}%")).clicked() {
+                        let _ = app.run("view.zoom", json!({"percent": pct}));
+                        ui.close();
+                    }
                 }
-            }
-        });
+                if ui.button("Fit").clicked() {
+                    let _ = app.run("view.fit", json!({}));
+                    ui.close();
+                }
+            });
+        }
         if big_button(ui, Icon::FitToWindow, "Fit to\nWindow", true).clicked() {
             app.ui.zoom = None;
         }
@@ -2530,6 +2562,17 @@ fn picture_format(app: &mut SlideApp, ui: &mut Ui) {
                     }
                 }
             });
+        });
+        let r = big_button(ui, Icon::ArtisticEffects, "Artistic\nEffects", enabled(app, "picture.artisticEffect"));
+        egui::Popup::menu(&r).show(|ui| {
+            if ui.button("None").clicked() {
+                run(app, "picture.artisticEffect", json!({"effect": "none"}));
+            }
+            for (e, l) in deckcraft_engine::cmd::artistic::EFFECTS {
+                if ui.button(*l).clicked() {
+                    run(app, "picture.artisticEffect", json!({"effect": e}));
+                }
+            }
         });
         let r = big_button(ui, Icon::Transparency, "Transparency", true);
         egui::Popup::menu(&r).show(|ui| {
@@ -3073,11 +3116,41 @@ fn playback(app: &mut SlideApp, ui: &mut Ui) {
     });
 }
 
+/// Preserve, and whether the open master or layout has a title or any footer placeholder.
+fn master_checks(app: &SlideApp) -> (bool, bool, bool) {
+    let Some(st) = app.session.active() else { return (false, false, false) };
+    let preserve = match st.selection.target {
+        Target::Master { master } => st.doc.masters.get(master).is_some_and(|m| m.preserve),
+        Target::Layout { master, layout } => st.doc.masters.get(master).and_then(|m| m.layouts.get(layout)).is_some_and(|l| l.preserve),
+        Target::Slides | Target::Handout | Target::NotesMaster => false,
+    };
+    let title = st.shapes().iter().any(|sh| sh.ph_type().is_some_and(|k| k.is_title()));
+    let footers = st.shapes().iter().any(|sh| sh.ph_type().is_some_and(|k| k.is_footer_kind()));
+    (preserve, title, footers)
+}
+
 fn slide_master(app: &mut SlideApp, ui: &mut Ui) {
     group(ui, |ui| {
         big(app, ui, Icon::NewSlide, "Insert\nLayout", "master.insertLayout", json!({}));
         big(app, ui, Icon::DeleteSlide, "Delete", "master.deleteLayout", json!({}));
         big(app, ui, Icon::Layout, "Rename", "app.dialog", json!({"id": "renameLayout"}));
+    });
+    group(ui, |ui| {
+        rows(ui, |ui| {
+            let (preserve, title, footers) = master_checks(app);
+            let mut on = preserve;
+            if ui.checkbox(&mut on, "Preserve").changed() {
+                run(app, "master.preserve", json!({"preserve": on}));
+            }
+            let mut on = title;
+            if ui.checkbox(&mut on, "Title").changed() {
+                run(app, "master.placeholders", json!({"title": on}));
+            }
+            let mut on = footers;
+            if ui.checkbox(&mut on, "Footers").changed() {
+                run(app, "master.placeholders", json!({"footers": on}));
+            }
+        });
     });
     group(ui, |ui| {
         let r = big_button(ui, Icon::Table, "Insert\nPlaceholder", true);
@@ -3104,6 +3177,76 @@ fn slide_master(app: &mut SlideApp, ui: &mut Ui) {
                 run(app, "app.browseThemeDialog", json!({}));
             }
         });
+        big(app, ui, Icon::FormatBackground, "Background\nStyles", "view.pane", json!({"pane": "background"}));
+    });
+    group(ui, |ui| {
+        if big_button(ui, Icon::Close, "Close\nMaster View", true).clicked() {
+            run(app, "view.closeMaster", json!({}));
+        }
+    });
+}
+
+fn notes_master(app: &mut SlideApp, ui: &mut Ui) {
+    group(ui, |ui| {
+        use deckcraft_model::PhType;
+        let shown = |app: &SlideApp, k: PhType| {
+            app.session.active().and_then(|d| d.doc.notes_master.as_ref()).is_some_and(|m| m.shapes.iter().any(|s| s.ph_type() == Some(k)))
+        };
+        for col in [
+            [("Header", "header", PhType::Header), ("Slide Image", "slideImage", PhType::SlideImage), ("Footer", "footer", PhType::Footer)],
+            [("Date", "date", PhType::Date), ("Body", "body", PhType::Body), ("Page Number", "pageNumber", PhType::SlideNum)],
+        ] {
+            rows(ui, |ui| {
+                for (label, key, k) in col {
+                    let mut on = shown(app, k);
+                    if ui.checkbox(&mut on, label).changed() {
+                        run(app, "notes.placeholders", json!({ key: on }));
+                    }
+                }
+            });
+        }
+    });
+    group(ui, |ui| {
+        big(app, ui, Icon::FormatBackground, "Background\nStyles", "view.pane", json!({"pane": "background"}));
+    });
+    group(ui, |ui| {
+        if big_button(ui, Icon::Close, "Close\nMaster View", true).clicked() {
+            run(app, "view.closeMaster", json!({}));
+        }
+    });
+}
+
+fn handout_master(app: &mut SlideApp, ui: &mut Ui) {
+    group(ui, |ui| {
+        let r = big_button(ui, Icon::Layout, &format!("Slides Per\nPage: {}", app.ui.handout_per_page), true);
+        egui::Popup::menu(&r).show(|ui| {
+            for n in [1u8, 2, 3, 4, 6, 9] {
+                if ui.selectable_label(app.ui.handout_per_page == n, format!("{n} Slide{}", if n == 1 { "" } else { "s" })).clicked() {
+                    app.ui.handout_per_page = n;
+                }
+            }
+        });
+    });
+    group(ui, |ui| {
+        let shown = |app: &SlideApp, k: deckcraft_model::PhType| {
+            app.session.active().and_then(|d| d.doc.handout_master.as_ref()).is_some_and(|m| m.shapes.iter().any(|s| s.ph_type() == Some(k)))
+        };
+        rows(ui, |ui| {
+            use deckcraft_model::PhType;
+            for (label, key, k) in [
+                ("Header", "header", PhType::Header),
+                ("Date", "date", PhType::Date),
+                ("Footer", "footer", PhType::Footer),
+                ("Page Number", "pageNumber", PhType::SlideNum),
+            ] {
+                let mut on = shown(app, k);
+                if ui.checkbox(&mut on, label).changed() {
+                    run(app, "handout.placeholders", json!({ key: on }));
+                }
+            }
+        });
+    });
+    group(ui, |ui| {
         big(app, ui, Icon::FormatBackground, "Background\nStyles", "view.pane", json!({"pane": "background"}));
     });
     group(ui, |ui| {
@@ -3159,3 +3302,11 @@ mod tests {
         assert_eq!(light, vec![Tokens::light().text; 2]);
     }
 }
+
+#[cfg(test)]
+#[path = "effects_tests.rs"]
+mod effects_tests;
+
+#[cfg(test)]
+#[path = "master_layout_tests.rs"]
+mod master_layout_tests;
