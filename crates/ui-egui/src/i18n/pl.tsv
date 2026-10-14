@@ -52,10 +52,12 @@ Action Button: Sound	Przycisk akcji: dźwięk
 Action Button: Video	Przycisk akcji: wideo
 Action Button: {k}	Przycisk akcji: {k}
 Action Buttons	Przyciski akcji
+Action Settings	Ustawienia akcji
 Add Animation	Dodaj animację
 Add Font	Dodaj czcionkę
 Add Point	Dodaj punkt
 Add Section	Dodaj sekcję
+Add Shape	Dodaj kształt
 Add\nAnimation	Dodaj\nanimację
 Address:	Adres:
 Adjust Shape	Dostosuj kształt
@@ -1276,11 +1278,16 @@ Callout: Line with No Border	Objaśnienie: linia bez obramowania
 Callout: Quad Arrow	Objaśnienie: strzałka w cztery strony
 Callout: Up-Down Arrow	Objaśnienie: strzałka w górę i w dół
 Cell Margins	Marginesy komórki
+Change Colors	Zmień kolory
+Change Layout	Zmień układ
 Chart Marker: Cross Lines	Znacznik wykresu: linie skrzyżowane
 Chart Marker: Plus Lines	Znacznik wykresu: plus z linii
 Chart Marker: Star Lines	Znacznik wykresu: gwiazdka z linii
 Commit Composition	Zatwierdź wprowadzany tekst
 Compose Text	Wprowadzanie tekstu (IME)
+Convert to Shapes	Konwertuj na kształty
+Convert to SmartArt	Konwertuj na grafikę SmartArt
+Convert to Text	Konwertuj na tekst
 Corner Tabs: Quarter Circles	Wypustki narożne: ćwiartki koła
 Corner Tabs: Squares	Wypustki narożne: kwadraty
 Corner Tabs: Triangles	Wypustki narożne: trójkąty
@@ -1302,6 +1309,7 @@ Crescent Moon	Półksiężyc
 Curved Square	Zaokrąglony kwadrat
 Decaying Wave	Fala gasnąca
 Delete Point	Usuń punkt
+Demote	Obniż poziom
 Diagonal Down Right	Po przekątnej w dół w prawo
 Diagonal Up Right	Po przekątnej w górę w prawo
 Diamonds From Bottom	Romby od dołu
@@ -1312,6 +1320,7 @@ Double Left	Podwójnie do lewej
 Double Right	Podwójnie do prawej
 Edit Photo Album…	Edytuj album fotograficzny…
 Edit Points	Edytuj punkty
+Edit SmartArt Text	Edytuj tekst grafiki SmartArt
 Fonts in Presentation	Czcionki w prezentacji
 Football	Piłka owalna
 From Bottom-Left	Od lewego dolnego rogu
@@ -1328,6 +1337,8 @@ Horizontal In	Poziomo do środka
 Horizontal Out	Poziomo na zewnątrz
 Icon Gallery	Galeria ikon
 In with Bounce	Do środka z odbiciem
+Insert Picture in SmartArt	Wstaw obraz do grafiki SmartArt
+Insert Picture in SmartArt…	Wstaw obraz do grafiki SmartArt…
 Loop de Loop	Pętla w pętli
 Move Handle	Przesuń uchwyt
 Move Point	Przesuń punkt
@@ -1351,8 +1362,10 @@ Picture Style Gallery	Galeria stylów obrazu
 Point Type	Typ punktu
 Points	Punkty
 Previous Comment	Poprzedni komentarz
+Promote	Podwyższ poziom
 Recolor	Zmień kolor
 Recolor Gallery	Galeria zmiany koloru
+Remove Shape	Usuń kształt
 Replace Fonts	Zamień czcionki
 Rescan Installed Fonts	Wyszukaj ponownie zainstalowane czcionki
 S Curve 1	Krzywa S 1
@@ -1363,6 +1376,7 @@ Sine Wave	Sinusoida
 Single Left	Pojedynczo do lewej
 Single Right	Pojedynczo do prawej
 Size and Position…	Rozmiar i położenie…
+SmartArt Styles	Style grafiki SmartArt
 Smoothly From Left	Płynnie od lewej
 Smoothly From Right	Płynnie od prawej
 Sound	Dźwięk
@@ -1374,6 +1388,7 @@ Starter Templates	Szablony startowe
 Strips In	Paski do środka
 Strips Out	Paski na zewnątrz
 Swoosh	Zamach
+Text Pane	Okienko tekstu
 Text Transform	Przekształcenie tekstu
 Text Transparency	Przezroczystość tekstu
 Themes and presentations	Motywy i prezentacje

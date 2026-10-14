@@ -51,10 +51,12 @@ Action Button: Sound	Кнопка дії: Звук
 Action Button: Video	Кнопка дії: Відео
 Action Button: {k}	Кнопка дії: {k}
 Action Buttons	Кнопки дій
+Action Settings	Параметри дії
 Add Animation	Додати анімацію
 Add Font	Додати шрифт
 Add Point	Додати точку
 Add Section	Додати розділ
+Add Shape	Додати фігуру
 Add\nAnimation	Додати анімацію
 Address:	Адреса:
 Adjust Shape	Змінити фігуру
@@ -1275,11 +1277,16 @@ Callout: Line with No Border	Виноска: Лінія без рамки
 Callout: Quad Arrow	Виноска: Стрілка в чотири боки
 Callout: Up-Down Arrow	Виноска: Стрілка вгору-вниз
 Cell Margins	Поля клітинки
+Change Colors	Змінити кольори
+Change Layout	Змінити макет
 Chart Marker: Cross Lines	Маркер діаграми: Перехресні лінії
 Chart Marker: Plus Lines	Маркер діаграми: Плюс із ліній
 Chart Marker: Star Lines	Маркер діаграми: Зірка з ліній
 Commit Composition	Підтвердити введений текст
 Compose Text	Введення тексту (IME)
+Convert to Shapes	Перетворити на фігури
+Convert to SmartArt	Перетворити на SmartArt
+Convert to Text	Перетворити на текст
 Corner Tabs: Quarter Circles	Кутові вкладки: Чверті кола
 Corner Tabs: Squares	Кутові вкладки: Квадрати
 Corner Tabs: Triangles	Кутові вкладки: Трикутники
@@ -1301,6 +1308,7 @@ Crescent Moon	Півмісяць
 Curved Square	Заокруглений квадрат
 Decaying Wave	Затухаюча хвиля
 Delete Point	Видалити точку
+Demote	Понизити рівень
 Diagonal Down Right	Діагональ униз праворуч
 Diagonal Up Right	Діагональ угору праворуч
 Diamonds From Bottom	Ромби знизу
@@ -1311,6 +1319,7 @@ Double Left	Подвійно ліворуч
 Double Right	Подвійно праворуч
 Edit Photo Album…	Змінити фотоальбом…
 Edit Points	Змінити точки
+Edit SmartArt Text	Змінити текст SmartArt
 Fonts in Presentation	Шрифти в презентації
 Football	Овальний м'яч
 From Bottom-Left	Із нижнього лівого кута
@@ -1327,6 +1336,8 @@ Horizontal In	Горизонтально всередину
 Horizontal Out	Горизонтально назовні
 Icon Gallery	Колекція піктограм
 In with Bounce	Усередину з відскоком
+Insert Picture in SmartArt	Вставити зображення в SmartArt
+Insert Picture in SmartArt…	Вставити зображення в SmartArt…
 Loop de Loop	Петля в петлі
 Move Handle	Перемістити маркер
 Move Point	Перемістити точку
@@ -1350,8 +1361,10 @@ Picture Style Gallery	Колекція стилів зображення
 Point Type	Тип точки
 Points	Точки
 Previous Comment	Попередній коментар
+Promote	Підвищити рівень
 Recolor	Перефарбувати
 Recolor Gallery	Колекція перефарбування
+Remove Shape	Видалити фігуру
 Replace Fonts	Замінити шрифти
 Rescan Installed Fonts	Повторно знайти встановлені шрифти
 S Curve 1	S-крива 1
@@ -1362,6 +1375,7 @@ Sine Wave	Синусоїда
 Single Left	Одинарно ліворуч
 Single Right	Одинарно праворуч
 Size and Position…	Розмір і розташування…
+SmartArt Styles	Стилі SmartArt
 Smoothly From Left	Плавно зліва
 Smoothly From Right	Плавно справа
 Sound	Звук
@@ -1373,6 +1387,7 @@ Starter Templates	Початкові шаблони
 Strips In	Смуги всередину
 Strips Out	Смуги назовні
 Swoosh	Змах
+Text Pane	Область тексту
 Text Transform	Перетворення тексту
 Text Transparency	Прозорість тексту
 Themes and presentations	Теми й презентації
