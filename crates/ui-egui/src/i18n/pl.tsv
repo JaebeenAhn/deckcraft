@@ -243,6 +243,7 @@ Connector: Curved	Łącznik: zakrzywiony
 Connector: Elbow	Łącznik: łamany
 Connector: Elbow (one bend)	Łącznik: łamany (jedno zagięcie)
 Content	Zawartość
+Contract	Zwiń
 Contrast	Kontrast
 Contrast {:+}%	Kontrast {:+}%
 Contributors	Współtwórcy
@@ -771,6 +772,7 @@ Path	Ścieżka
 Pattern fill	Wypełnienie deseniem
 Pause	Wstrzymaj
 Peek In	Wsunięcie
+Peek Out	Wysunięcie
 Peel Off	Odklejenie
 Pencil	Ołówek
 Pentagon	Pięciokąt
@@ -1002,6 +1004,7 @@ Shred	Niszczarka
 Shrink & Turn	Zmniejszenie i obrót
 Shrink text on overflow	Zmniejszaj tekst przy przepełnieniu
 Simple Frame, White	Prosta ramka, biała
+Sink Down	Opadnięcie
 Size	Rozmiar
 Size & Properties	Rozmiar i właściwości
 Slide Master	Wzorzec slajdów

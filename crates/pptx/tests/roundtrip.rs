@@ -635,6 +635,23 @@ fn every_animation_effect_survives() {
     }
 }
 
+#[test]
+fn animation_rewind_survives() {
+    let mut p = defaults::new_presentation(None);
+    let mut s = p.slides[0].as_ref().clone();
+    let sh = shape(&mut p, "Target", 100.0, 100.0, 100.0, 100.0);
+    let id = sh.id;
+    s.shapes.push(sh);
+    s.animations.push(Animation { shape: id, rewind: true, ..Default::default() });
+    s.animations.push(Animation { shape: id, effect: "fly".into(), option: "l".into(), start: AnimStart::WithPrevious, ..Default::default() });
+    p.slides[0] = Arc::new(s);
+    let q = round(&p);
+    let b = &q.slides[0].animations;
+    assert_eq!(b.len(), 2);
+    assert!(b[0].rewind);
+    assert!(!b[1].rewind);
+}
+
 /// Writes bisection variants of the rich deck to `DECKCRAFT_PPTX_BISECT` (manual checks).
 #[test]
 fn bisect_variants() {
@@ -1018,4 +1035,72 @@ fn linked_pictures_are_written_with_r_link() {
     let mut rels = String::new();
     std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/_rels/slide1.xml.rels").expect("rels"), &mut rels).expect("read");
     assert!(rels.contains(r#"Target="file:///tmp/linked.png" TargetMode="External""#), "{rels}");
+}
+
+/// #210: `.potx` and `.ppsx` were written with the `.pptx` main content type.
+#[test]
+fn templates_and_slide_shows_declare_their_own_main_content_type() {
+    let p = rich_deck();
+    for (ext, kind) in [("pptx", "presentation"), ("potx", "template"), ("ppsx", "slideshow")] {
+        let bytes = deckcraft_pptx::export_as(&p, ext).expect("export");
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).expect("zip");
+        let ct = std::io::read_to_string(z.by_name("[Content_Types].xml").expect("content types")).expect("read");
+        assert!(ct.contains(&format!("presentationml.{kind}.main+xml")), "{ext}: {ct}");
+        assert_eq!(deckcraft_pptx::import(&bytes).expect("import").slides.len(), p.slides.len(), "{ext} reads back");
+    }
+}
+
+/// #214: a lone guide was always written `adj`, but these presets name it `adj1`, and PowerPoint
+/// won't open the file otherwise. (Names as PowerPoint writes them.)
+#[test]
+fn single_guide_names_follow_the_preset() {
+    let mut p = defaults::new_presentation(None);
+    let mut s = new_slide(&mut p, "Guides");
+    let cases = [
+        ("bentConnector3", "adj1"),
+        ("curvedConnector3", "adj1"),
+        ("frame", "adj1"),
+        ("mathPlus", "adj1"),
+        ("mathMinus", "adj1"),
+        ("mathMultiply", "adj1"),
+        ("roundRect", "adj"),
+        ("chevron", "adj"),
+    ];
+    for (prst, _) in cases {
+        let mut sh = shape(&mut p, prst, 0.0, 0.0, 100.0, 50.0);
+        sh.geom = Geom::Preset { name: prst.into(), adj: vec![20000.0] };
+        s.shapes.push(sh);
+    }
+    p.slides.push(Arc::new(s));
+    let bytes = deckcraft_pptx::export(&p).expect("export");
+    let mut z = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).expect("zip");
+    let xml = std::io::read_to_string(z.by_name("ppt/slides/slide2.xml").expect("slide")).expect("read");
+    for (prst, gd) in cases {
+        assert!(xml.contains(&format!(r#"<a:prstGeom prst="{prst}"><a:avLst><a:gd name="{gd}" fmla="val 20000"/>"#)), "{prst} → {gd}: {xml}");
+    }
+}
+
+/// #147: PowerPoint's Float Down is preset 47 (Float Up is 42); it imported as a plain fade.
+#[test]
+fn float_down_is_preset_47_both_ways() {
+    let mut p = defaults::new_presentation(None);
+    let mut s = new_slide(&mut p, "Float");
+    let sh = shape(&mut p, "Building", 0.0, 0.0, 100.0, 100.0);
+    let id = sh.id;
+    s.shapes.push(sh);
+    s.animations = vec![
+        Animation { shape: id, class: AnimClass::Entrance, effect: "float".into(), option: "d".into(), ..Default::default() },
+        Animation { shape: id, class: AnimClass::Exit, effect: "floatOut".into(), option: "d".into(), ..Default::default() },
+        Animation { shape: id, class: AnimClass::Exit, effect: "floatOut".into(), option: "u".into(), ..Default::default() },
+    ];
+    p.slides.push(Arc::new(s));
+    let bytes = deckcraft_pptx::export(&p).expect("export");
+    let mut z = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).expect("zip");
+    let xml = std::io::read_to_string(z.by_name("ppt/slides/slide2.xml").expect("slide")).expect("read");
+    assert!(xml.contains(r#"presetID="47" presetClass="entr" presetSubtype="0""#), "{xml}");
+    assert!(xml.contains(r#"presetID="47" presetClass="exit" presetSubtype="0""#), "{xml}");
+    assert!(xml.contains(r#"presetID="42" presetClass="exit" presetSubtype="0""#), "{xml}");
+    let q = deckcraft_pptx::import(&bytes).expect("import");
+    let got: Vec<(&str, &str)> = q.slides[1].animations.iter().map(|a| (a.effect.as_str(), a.option.as_str())).collect();
+    assert_eq!(got, [("float", "d"), ("floatOut", "d"), ("floatOut", "u")]);
 }

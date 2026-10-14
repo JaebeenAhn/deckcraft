@@ -242,6 +242,7 @@ Connector: Curved	З’єднувач: кривий
 Connector: Elbow	З’єднувач: кутовий
 Connector: Elbow (one bend)	З’єднувач: кутовий (один згин)
 Content	Вміст
+Contract	Згорнути
 Contrast	Контрастність
 Contrast {:+}%	Контраст {:+}%
 Contributors	Учасники
@@ -770,6 +771,7 @@ Path	Контур
 Pattern fill	Візерункова заливка
 Pause	Пауза
 Peek In	Визирання
+Peek Out	Ховання
 Peel Off	Відшарування
 Pencil	Олівець
 Pentagon	П’ятикутник
@@ -1001,6 +1003,7 @@ Shred	Подрібнення
 Shrink & Turn	Зменшення й обертання
 Shrink text on overflow	Зменшувати текст у разі переповнення
 Simple Frame, White	Проста біла рамка
+Sink Down	Опускання
 Size	Розмір
 Size & Properties	Розмір і властивості
 Slide Master	Зразок слайдів

@@ -101,6 +101,10 @@ pub(crate) fn edit_text<T>(s: &mut Session, f: impl FnOnce(&mut TextBody, &mut T
         let mut t = t0.clone();
         let body = body_mut(doc, sel, &t).ok_or_else(|| bad("text", "the text being edited is gone"))?;
         let r = f(body, &mut t);
+        // The saved shrink-on-overflow scale was for the old text: fit the new text afresh.
+        if let Some(AutoFit::Shrink { font_scale, line_reduction }) = &mut body.body.autofit {
+            (*font_scale, *line_reduction) = (1.0, 0.0);
+        }
         sel.text = Some(t);
         Ok(r)
     })?;
@@ -218,7 +222,7 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
         return ok();
     }
-    let id = match id_param(p, "id") {
+    let id = match id_param(p, "id", "text.edit")? {
         Some(i) => i,
         None => s.doc()?.selection.shapes.first().copied().ok_or_else(|| bad("text.edit", "select a shape with text"))?,
     };
@@ -703,7 +707,7 @@ pub(crate) fn apply_leading_tabs(para: &mut deckcraft_model::text::Paragraph) ->
 
 fn set(s: &mut Session, p: &Value) -> Result<Value> {
     let text = str_param(p, "text").ok_or_else(|| bad("text.set", "missing `text`"))?.to_string();
-    let id = match id_param(p, "id") {
+    let id = match id_param(p, "id", "text.set")? {
         Some(i) => i,
         None => s.doc()?.selection.shapes.first().copied().ok_or_else(|| bad("text.set", "missing `id` (or select a shape)"))?,
     };
@@ -739,7 +743,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id = match id_param(p, "id") {
+    let id = match id_param(p, "id", "text.get")? {
         Some(i) => i,
         None => match &st.selection.text {
             Some(t) => t.shape,

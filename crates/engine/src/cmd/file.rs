@@ -82,11 +82,18 @@ pub fn open_presentation(name: &str, bytes: &[u8]) -> Result<Presentation> {
         deckcraft_format::repair(&mut p);
         return Ok(p);
     }
+    if deckcraft_pptx::is_encrypted(bytes) {
+        return Err(EngineError::Other(format!("{name} is password-protected. DeckCraft can't open password-protected presentations yet.")));
+    }
     let lower = name.to_ascii_lowercase();
     if lower.ends_with(".txt") || lower.ends_with(".md") {
         let text = String::from_utf8_lossy(bytes);
         let mut p = defaults::blank_presentation(defaults::WIDE, Default::default(), false);
-        deckcraft_format::outline_to_slides(&mut p, &text);
+        if lower.ends_with(".md") {
+            deckcraft_format::markdown_to_slides(&mut p, &text);
+        } else {
+            deckcraft_format::outline_to_slides(&mut p, &text);
+        }
         if p.slides.is_empty() {
             p = defaults::new_presentation(None);
         }
@@ -126,10 +133,10 @@ fn open_bytes(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"document": i, "missingFonts": s.doc()?.missing_fonts}))
 }
 
-/// Encode the presentation in `format` (`deckcraft`, `pptx`, `outline`).
+/// Encode the presentation in `format` (`deckcraft`, `pptx`, `potx`, `ppsx`, `outline`, `pdf`).
 pub fn save_bytes(doc: &Presentation, format: &str) -> Result<Vec<u8>> {
     match format {
-        "pptx" | "potx" | "ppsx" => deckcraft_pptx::export(doc).map_err(|e| EngineError::Other(e.to_string())),
+        f @ ("pptx" | "potx" | "ppsx") => deckcraft_pptx::export_as(doc, f).map_err(|e| EngineError::Other(e.to_string())),
         "outline" | "txt" => Ok(deckcraft_format::slides_to_outline(doc).into_bytes()),
         "pdf" => deckcraft_pdf::export(doc, &Default::default()).map_err(|e| EngineError::Other(e.to_string())),
         _ => deckcraft_format::save(doc).map_err(|e| EngineError::Other(e.to_string())),
@@ -204,8 +211,12 @@ pub fn writable_format_for_path(path: &str) -> Option<&'static str> {
 
 pub fn format_for_path(path: &str) -> &'static str {
     let l = path.to_ascii_lowercase();
-    if l.ends_with(".pptx") || l.ends_with(".potx") || l.ends_with(".ppsx") {
+    if l.ends_with(".pptx") {
         "pptx"
+    } else if l.ends_with(".potx") {
+        "potx"
+    } else if l.ends_with(".ppsx") {
+        "ppsx"
     } else if l.ends_with(".png") {
         "png"
     } else if l.ends_with(".jpg") || l.ends_with(".jpeg") {
@@ -353,11 +364,12 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
             write_file(&path, &bytes)?;
             Ok(json!({"path": path, "bytes": bytes.len()}))
         }
-        other => {
-            let bytes = save_bytes(&st.doc, other)?;
+        "pptx" | "potx" | "ppsx" | "deckcraft" | "outline" | "txt" => {
+            let bytes = save_bytes(&st.doc, &format)?;
             write_file(&path, &bytes)?;
             Ok(json!({"path": path, "bytes": bytes.len()}))
         }
+        other => Err(bad("file.export", format!("unknown format `{other}`"))),
     }
 }
 
