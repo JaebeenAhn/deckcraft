@@ -15,6 +15,10 @@
 100% Stacked Bar	Нормована лінійчата з накопиченням
 100% Stacked Column	Нормована стовпчаста з накопиченням
 35mm Slides	Слайди 35 мм
+4 Point Star	4-кутна зірка
+5 Point Star	5-кутна зірка
+6 Point Star	6-кутна зірка
+8 Point Star	8-кутна зірка
 @ribbon:Home	Основне
 @ribbon:Insert	Вставлення
 @{}: {} PRs, {} commits, +{} / −{} lines (Δ {}), +{} / −{} binary assets, {} – {}	@{}: запити на злиття: {}, коміти: {}, рядки: +{} / −{} (Δ {}), двійкові ресурси: +{} / −{}, {} – {}
@@ -48,6 +52,8 @@ Action Button: Video	Кнопка дії: Відео
 Action Button: {k}	Кнопка дії: {k}
 Action Buttons	Кнопки дій
 Add Animation	Додати анімацію
+Add Font	Додати шрифт
+Add Point	Додати точку
 Add Section	Додати розділ
 Add\nAnimation	Додати анімацію
 Address:	Адреса:
@@ -80,6 +86,7 @@ Play/Pause GIF	Відтворити/призупинити GIF
 Animations on Slide	Анімації на слайді
 Appear	Поява
 Apply	Застосувати
+Apply Design Idea	Застосувати ідею оформлення
 Apply To All	Застосувати до всіх
 Apply to All	Застосувати до всіх
 Apply\nTo All	Застосувати до всіх
@@ -1244,6 +1251,9 @@ Arrow: Curved Left	Стрілка: Вигнута ліворуч
 Arrow: Curved Right	Стрілка: Вигнута праворуч
 Arrow: Curved Up	Стрілка: Вигнута вгору
 Arrow: Swoosh	Стрілка: Дугова
+Bean	Квасоля
+Bounce Left	Відскок ліворуч
+Bounce Right	Відскок праворуч
 Callout: Bent Line	Виноска: Ламана лінія
 Callout: Bent Line with Accent Bar	Виноска: Ламана лінія зі смугою акценту
 Callout: Bent Line with Border and Accent Bar	Виноска: Ламана лінія з рамкою і смугою акценту
@@ -1280,36 +1290,76 @@ Print	Друк
 Info	Відомості
 Print…	Друк…
 Counterclockwise	Проти годинникової стрілки
+Crescent Moon	Півмісяць
+Curved Square	Заокруглений квадрат
+Decaying Wave	Затухаюча хвиля
+Delete Point	Видалити точку
+Diagonal Down Right	Діагональ униз праворуч
+Diagonal Up Right	Діагональ угору праворуч
 Diamonds From Bottom	Ромби знизу
 Diamonds From Left	Ромби зліва
 Diamonds From Right	Ромби справа
 Diamonds From Top	Ромби згори
 Double Left	Подвійно ліворуч
 Double Right	Подвійно праворуч
+Edit Points	Змінити точки
+Football	Овальний м'яч
 From Bottom-Left	Із нижнього лівого кута
 From Bottom-Right	Із нижнього правого кута
 From Top-Left	Із верхнього лівого кута
 From Top-Right	Із верхнього правого кута
+Heartbeat	Серцебиття
 Hexagons From Bottom	Шестикутники знизу
 Hexagons From Left	Шестикутники зліва
 Hexagons From Right	Шестикутники справа
 Hexagons From Top	Шестикутники згори
+Horizontal Figure 8	Горизонтальна вісімка
 Horizontal In	Горизонтально всередину
 Horizontal Out	Горизонтально назовні
+Icon Gallery	Колекція піктограм
 In with Bounce	Усередину з відскоком
+Loop de Loop	Петля в петлі
+Move Handle	Перемістити маркер
+Move Point	Перемістити точку
+Neutron	Нейтрон
+Next Comment	Наступний коментар
+No comments.	Немає коментарів.
+No icons match.	Немає відповідних піктограм.
 Out with Bounce	Назовні з відскоком
 Particles In	Частинки всередину
 Particles Out	Частинки назовні
+Paste Special	Спеціальне вставлення
+Paste Special…	Спеціальне вставлення…
+Peanut	Арахіс
+Pick a design for this slide. Ideas are generated on your device.	Виберіть оформлення для цього слайда. Ідеї створюються на вашому пристрої.
+Point Type	Тип точки
+Points	Точки
+Previous Comment	Попередній коментар
+Rescan Installed Fonts	Повторно знайти встановлені шрифти
+S Curve 1	S-крива 1
+S Curve 2	S-крива 2
+Sine Wave	Синусоїда
 Single Left	Одинарно ліворуч
 Single Right	Одинарно праворуч
+Size and Position…	Розмір і розташування…
 Smoothly From Left	Плавно зліва
 Smoothly From Right	Плавно справа
+Sound	Звук
+Spiral Left	Спіраль ліворуч
+Spiral Right	Спіраль праворуч
+Spring	Пружина
+Stairs Down	Сходи вниз
 Strips In	Смуги всередину
 Strips Out	Смуги назовні
+Swoosh	Змах
+Text Transform	Перетворення тексту
+Text Transparency	Прозорість тексту
 Through Black From Left	Через чорний зліва
 Through Black From Right	Через чорний справа
+Vertical Figure 8	Вертикальна вісімка
 Vertical In	Вертикально всередину
 Vertical Out	Вертикально назовні
+Zigzag	Зигзаг
 Zoom and Rotate	Масштаб і обертання
 circle	коло
 diamond	ромб

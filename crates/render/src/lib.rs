@@ -11,6 +11,8 @@ mod bevel;
 mod camera;
 mod chart;
 mod colr;
+mod extrude;
+mod light;
 
 mod compound;
 mod extent;
@@ -273,6 +275,17 @@ impl Default for Renderer {
     }
 }
 
+static PANICS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn note_panic() {
+    PANICS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Render panics caught (and drawn as blank) since start; soak tests require it to stay 0.
+pub fn panics_caught() -> u64 {
+    PANICS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 thread_local! {
     static RENDERER: std::cell::RefCell<Renderer> = std::cell::RefCell::new(Renderer::default());
 }
@@ -346,6 +359,7 @@ pub fn render_slide_drawn(pres: &Presentation, index: usize, opts: &RenderOpts) 
         }
         Err(_) => {
             log::error!("rendering slide {index} panicked; showing a blank slide");
+            note_panic();
             RENDERER.with(|r| *r.borrow_mut() = Renderer::default());
             let (w, h) = output_size(pres, opts);
             (Image { width: w as u32, height: h as u32, pixels: vec![255; w as usize * h as usize * 4] }, page)
@@ -370,6 +384,7 @@ pub fn render_slide_part(pres: &Presentation, index: usize, part: SlidePart, opt
         Ok(img) => img,
         Err(_) => {
             log::error!("rendering part of slide {index} panicked; showing nothing");
+            note_panic();
             RENDERER.with(|r| *r.borrow_mut() = Renderer::default());
             let (w, h) = output_size(pres, opts);
             Image { width: w as u32, height: h as u32, pixels: vec![0; w as usize * h as usize * 4] }
@@ -401,6 +416,7 @@ pub fn render_blend(
         Ok(img) => img,
         Err(_) => {
             log::error!("rendering a frame between slides {old} and {new} panicked; showing the new slide");
+            note_panic();
             RENDERER.with(|r| *r.borrow_mut() = Renderer::default());
             render_slide(pres, new, opts)
         }
@@ -413,6 +429,7 @@ pub fn render_layout(pres: &Presentation, master: usize, layout: Option<usize>, 
         Ok(img) => img,
         Err(_) => {
             log::error!("rendering a layout panicked; showing a blank image");
+            note_panic();
             RENDERER.with(|r| *r.borrow_mut() = Renderer::default());
             Image::default()
         }
@@ -942,6 +959,32 @@ impl Renderer {
             ctx.push_layer(None, None, None, None, None);
             let _ = r;
         }
+        // A 3-D extrusion under a turned camera: the sides, swept behind the face.
+        if let Some(raw) = effects.as_ref().and_then(|e| e.raw3d.as_deref())
+            && let Some(ex) = extrude::from_raw(raw)
+            && let Some(cam) = camera::from_raw(raw)
+            && let Some(turn) = camera::affine(&cam, w, h)
+            && turn.determinant().abs() > 1e-9
+        {
+            let face = match &fill {
+                Some(Fill::Solid { color: c }) => Some(rctx.color(c, fill_ph)),
+                _ => None,
+            };
+            let pre = m * turn.inverse();
+            let lit = light::Lighting::from_raw(raw);
+            extrude::draw(ctx, &outline, w, h, &cam, ex.depth, pre, turn, extrude::side_color(rctx, &ex, face), &lit);
+        }
+        // A 3-D contour: a band around the outline, behind the face (and in front of any sides).
+        if let Some(raw) = effects.as_ref().and_then(|e| e.raw3d.as_deref())
+            && let Some(c) = extrude::contour_from_raw(raw)
+        {
+            let face = match &fill {
+                Some(Fill::Solid { color: col }) => Some(rctx.color(col, fill_ph)),
+                _ => None,
+            };
+            let col = c.color.as_ref().map(|k| rctx.color(k, face)).or(face).unwrap_or(Rgba::rgb(0xff, 0xff, 0xff));
+            extrude::draw_contour(ctx, &outline, m, c.width, col, &light::Lighting::from_raw(raw));
+        }
         // Fill.
         match &s.kind {
             ShapeKind::Picture { fill: pf } => {
@@ -1458,6 +1501,7 @@ pub(crate) fn stroke(
     if let Some(d) = &line.dash {
         let pat: Vec<f64> = d.pattern().iter().map(|v| v * lw.max(0.75)).collect();
         let pat = dash_with_caps(pat, cap, sw);
+        let pat = limit_dash_count(path, pat);
         if !pat.is_empty() && pat.iter().all(|v| *v > 0.0) {
             if cap == kurbo::Cap::Square {
                 sk = sk.with_caps(kurbo::Cap::Butt);
@@ -1596,6 +1640,30 @@ fn dash_with_caps(mut pat: Vec<f64>, cap: kurbo::Cap, width: f64) -> Vec<f64> {
         *v = if i.is_multiple_of(2) { (*v - width).max(width * 1e-3) } else { *v + width };
     }
     pat
+}
+
+/// The most dashes one stroke is cut into. Stroking expands every dash into its own outline, so a
+/// tiny dash on a huge shape (a 1 EMU-wide `custDash` on a 2147483647 EMU rectangle) would
+/// otherwise need gigabytes and abort the app when the slide is drawn. Past this count the
+/// pattern is scaled up evenly, which looks the same: the dashes are far below a pixel by then.
+const MAX_DASHES: f64 = 20_000.0;
+
+fn limit_dash_count(path: &BezPath, pat: Vec<f64>) -> Vec<f64> {
+    use kurbo::ParamCurveArclen;
+    let period: f64 = pat.iter().sum();
+    if !(period.is_finite() && period > 0.0) {
+        return pat;
+    }
+    let len: f64 = path.segments().map(|s| s.arclen(1e-2)).sum();
+    let dashes = len / period;
+    if !len.is_finite() {
+        return vec![];
+    }
+    if dashes <= MAX_DASHES {
+        return pat;
+    }
+    let k = dashes / MAX_DASHES;
+    pat.into_iter().map(|v| v * k).collect()
 }
 
 fn end_points(path: &BezPath) -> Option<((Point, Point), (Point, Point))> {

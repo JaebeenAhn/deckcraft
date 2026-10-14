@@ -41,8 +41,10 @@ pub fn transition(imp: &mut Imp, part: &Part, t: &El) -> Option<Transition> {
     });
     if let Some(snd) = t.path(&["sndAc", "stSnd", "snd"]) {
         tr.sound = dml::media_ref(imp, part, snd);
+        tr.sound_loop = t.path(&["sndAc", "stSnd"]).and_then(|s| s.attr("loop")).is_some_and(|v| v == "1" || v == "true");
     }
-    if tr.kind == "none" && tr.advance_on_click && tr.advance_after_ms.is_none() && tr.sound.is_none() {
+    tr.stop_sound = t.path(&["sndAc", "endSnd"]).is_some();
+    if tr.kind == "none" && tr.advance_on_click && tr.advance_after_ms.is_none() && tr.sound.is_none() && !tr.stop_sound {
         return None;
     }
     Some(tr)
@@ -147,6 +149,7 @@ pub fn animations(imp: &mut Imp, part: &Part, ctx: &IdCtx, timing: &El, _shapes:
             rewind: c.attr("fill") == Some("remove"),
             smooth_start: c.f64("accel").map(|v| v / 100_000.0).unwrap_or(0.0),
             smooth_end: c.f64("decel").map(|v| v / 100_000.0).unwrap_or(0.0),
+            bounce_end: c.f64("bounceEnd").map(|v| (v / 100_000.0).clamp(0.0, 1.0)).unwrap_or(0.0),
             ..Default::default()
         };
         a.repeat = match c.attr("repeatCount") {

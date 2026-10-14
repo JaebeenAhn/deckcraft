@@ -16,13 +16,18 @@ pub fn transition(w: &mut W, x: &mut Exp, o: &mut Out, t: &Transition) {
         601..=900 => "med",
         _ => "slow",
     };
-    let sound = t.sound.and_then(|m| x.media_rel(o, m, "audio"));
+    let sound = t.sound.and_then(|m| x.media_rel(o, m, "audio").map(|r| (r, x.p.media(m).map(|i| i.name.clone()).unwrap_or_default())));
     let snd = |w: &mut W| {
-        if let Some(r) = &sound {
+        if let Some((r, name)) = &sound {
             w.open0("p:sndAc");
-            w.open0("p:stSnd");
-            w.empty("p:snd", A::new().a("r:embed", r).a("name", "sound.wav"));
+            w.open("p:stSnd", A::new().t("loop", t.sound_loop));
+            let name = if name.is_empty() { "sound.wav" } else { name.as_str() };
+            w.empty("p:snd", A::new().a("r:embed", r).a("name", name));
             w.close("p:stSnd");
+            w.close("p:sndAc");
+        } else if t.stop_sound {
+            w.open0("p:sndAc");
+            w.empty0("p:endSnd");
             w.close("p:sndAc");
         }
     };
@@ -359,6 +364,25 @@ fn behaviors(w: &mut W, x: &mut Exp, ids: &mut Ids, e: &Eff) {
                 w.close("p:to");
                 w.close("p:set");
             }
+            "colorPulse" => {
+                // As PowerPoint writes it: text and fill go to the colour and back (autoRev). The behaviour
+                // duration is the one import reads as the effect duration.
+                let c = a.color.clone().unwrap_or(deckcraft_model::ColorRef::rgb(deckcraft_color::Rgba::rgb(0xC0, 0x00, 0x00)));
+                for (attr, child) in [("style.color", true), ("fillcolor", false)] {
+                    w.open("p:animClr", A::new().a("clrSpc", "rgb").a("dir", "cw"));
+                    w.open("p:cBhvr", A::new().o("override", child.then_some("childStyle")));
+                    w.empty("p:cTn", A::new().a("id", ids.next()).a("dur", dur.max(1)).a("autoRev", "1").a("fill", "remove"));
+                    tgt(w, e.spid, e.paragraph);
+                    w.open0("p:attrNameLst");
+                    w.elt("p:attrName", attr);
+                    w.close("p:attrNameLst");
+                    w.close("p:cBhvr");
+                    w.open0("p:to");
+                    super::dml::color(w, &c);
+                    w.close("p:to");
+                    w.close("p:animClr");
+                }
+            }
             "fillColor" | "objectColor" | "fontColor" | "lineColor" | "complementaryColor" | "darken" | "lighten" => {
                 let attr = match a.effect.as_str() {
                     "fontColor" => "style.color",
@@ -442,6 +466,9 @@ fn effect_par(w: &mut W, x: &mut Exp, ids: &mut Ids, e: &Eff, first_in_click: bo
     };
     let accel = (a.smooth_start > 0.0).then(|| (a.smooth_start.clamp(0.0, 1.0) * 100_000.0).round() as i64);
     let decel = (a.smooth_end > 0.0).then(|| (a.smooth_end.clamp(0.0, 1.0) * 100_000.0).round() as i64);
+    // `bounceEnd` is a positive percentage (100000 = 100%), same scale as accel/decel. The model stores 0–1.
+    let bounce =
+        (a.bounce_end.is_finite() && a.bounce_end > 0.0).then(|| (a.bounce_end.clamp(0.0, 1.0) * 100_000.0).round() as i64).filter(|n| *n > 0);
     w.open0("p:par");
     w.open(
         "p:cTn",
@@ -453,6 +480,7 @@ fn effect_par(w: &mut W, x: &mut Exp, ids: &mut Ids, e: &Eff, first_in_click: bo
             .o("repeatCount", repeat)
             .o("accel", accel)
             .o("decel", decel)
+            .o("bounceEnd", bounce)
             .t("autoRev", a.auto_reverse)
             .a("fill", if a.rewind { "remove" } else { "hold" })
             .a("grpId", e.grp)

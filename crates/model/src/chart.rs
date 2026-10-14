@@ -116,6 +116,87 @@ impl ChartType {
     }
 }
 
+/// `c:trendlineType`: the six trendlines DrawingML charts store.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TrendlineType {
+    Exp,
+    #[default]
+    Linear,
+    Log,
+    MovingAvg,
+    Poly,
+    Power,
+}
+
+impl TrendlineType {
+    pub fn xml(self) -> &'static str {
+        match self {
+            TrendlineType::Exp => "exp",
+            TrendlineType::Linear => "linear",
+            TrendlineType::Log => "log",
+            TrendlineType::MovingAvg => "movingAvg",
+            TrendlineType::Poly => "poly",
+            TrendlineType::Power => "power",
+        }
+    }
+    pub fn from_xml(s: &str) -> Option<Self> {
+        Some(match s {
+            "exp" => TrendlineType::Exp,
+            "linear" => TrendlineType::Linear,
+            "log" => TrendlineType::Log,
+            "movingAvg" => TrendlineType::MovingAvg,
+            "poly" => TrendlineType::Poly,
+            "power" => TrendlineType::Power,
+            _ => return None,
+        })
+    }
+}
+
+/// One `c:trendline` on a series. Polynomials use `order` (2–6); moving averages use `period`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Trendline {
+    pub kind: TrendlineType,
+    /// `c:name`, when the file sets one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Polynomial order (`c:order`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u32>,
+    /// Moving-average period (`c:period`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub period: Option<u32>,
+    /// Forecast forward and backward, in category units (`c:forward`, `c:backward`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forward: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backward: Option<f64>,
+    /// Cross the value axis at this value (`c:intercept`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intercept: Option<f64>,
+    /// Show the equation (`c:dispEq`).
+    pub disp_eq: bool,
+    /// Show R² (`c:dispRSqr`).
+    pub disp_r_sqr: bool,
+}
+
+impl Default for Trendline {
+    fn default() -> Self {
+        Trendline {
+            kind: TrendlineType::Linear,
+            name: None,
+            order: None,
+            period: None,
+            forward: None,
+            backward: None,
+            intercept: None,
+            disp_eq: false,
+            disp_r_sqr: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Series {
@@ -138,6 +219,9 @@ pub struct Series {
     /// source data's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number_format: Option<String>,
+    /// Trendlines (`c:trendline`), in file order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub trendlines: Vec<Trendline>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -327,7 +411,12 @@ impl Chart {
     /// A value axis label in the axis' number format and the chart's language.
     pub fn axis_label(&self, secondary: bool, v: f64) -> String {
         let code = if secondary { &self.y2_format } else { &self.y_format };
-        crate::numfmt::format(code.as_deref().unwrap_or("General"), v, self.lang.as_deref())
+        // A 100 % stacked chart's value axis counts in percent unless the file says otherwise.
+        let code = match code.as_deref() {
+            None | Some("General") if !secondary && self.kind.percent() => "0%",
+            c => c.unwrap_or("General"),
+        };
+        crate::numfmt::format(code, v, self.lang.as_deref())
     }
 
     /// A data label of series `s`: its number format, else its axis', in the chart's language.
@@ -589,6 +678,24 @@ mod tests {
     }
 
     #[test]
+    fn general_labels_keep_every_digit_the_data_has() {
+        // #324: labels were rounded to one decimal ("100000.0" for 99999.99).
+        for kind in [ChartType::Column, ChartType::Pie, ChartType::Doughnut, ChartType::Line, ChartType::Scatter] {
+            let c = Chart::sample(kind);
+            let s = &c.series[0];
+            for (v, want) in
+                [(1220.82, "1220.82"), (99999.99, "99999.99"), (1500.05, "1500.05"), (1500.0, "1500"), (1234.567, "1234.567"), (999.99, "999.99")]
+            {
+                assert_eq!(c.data_label(s, v), want, "{kind:?}");
+            }
+        }
+        // Small ranges keep distinct value-axis ticks (0.123 used to give 0, 0.0, 0.1, 0.1…).
+        let c = Chart::sample(ChartType::Column);
+        let ticks: Vec<String> = (0..=5).map(|i| c.axis_label(false, f64::from(i) * 0.025)).collect();
+        assert_eq!(ticks, ["0", "0.025", "0.05", "0.075", "0.1", "0.125"]);
+    }
+
+    #[test]
     fn axis_labels_use_the_format_and_language() {
         let mut c = Chart::sample(ChartType::Column);
         c.y_format = Some(r#"_-* #\ ##0\ "₽"_-;\-* #\ ##0\ "₽"_-;_-* "-"??\ "₽"_-;_-@_-"#.into());
@@ -604,6 +711,16 @@ mod tests {
         c.series[0].number_format = Some(r#"#,##0\ "₽""#.into());
         assert_eq!(c.data_label(&c.series[0], 516_600_000.0), "516\u{a0}600\u{a0}000 ₽");
         assert_eq!(c.data_label(&c.series[1], 0.0), "- ₽");
+    }
+
+    #[test]
+    fn full_percent_axes_count_in_percent() {
+        let mut c = Chart::sample(ChartType::PercentColumn);
+        assert_eq!(c.axis_label(false, 0.5), "50%");
+        c.y_format = Some("0.0%".into());
+        assert_eq!(c.axis_label(false, 0.5), "50.0%");
+        let c = Chart::sample(ChartType::Column);
+        assert_eq!(c.axis_label(false, 0.5), "0.5");
     }
 
     #[test]

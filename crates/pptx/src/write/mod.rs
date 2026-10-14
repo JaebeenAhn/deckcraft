@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use deckcraft_geom::Xfrm;
-use deckcraft_model::text::{Paragraph, TextBody};
+use deckcraft_model::text::{ListStyle, Paragraph, TextBody};
+use deckcraft_model::theme::Theme;
 use deckcraft_model::{
     Background, Comment, Layout, LayoutId, Master, MediaId, PhType, Placeholder, Presentation, Shape, ShapeId, Slide, SlideId, defaults,
 };
@@ -90,6 +91,7 @@ fn ext_for(content_type: &str, name: &str, data: &[u8]) -> String {
         "audio/x-ms-wma" => "wma",
         "audio/ogg" => "ogg",
         "audio/flac" => "flac",
+        "model/gltf-binary" => "glb",
         _ => "",
     };
     if !by_ct.is_empty() {
@@ -341,7 +343,42 @@ fn notes_master_shapes(size: deckcraft_geom::Size) -> Vec<Shape> {
     ]
 }
 
-fn notes_style() -> deckcraft_model::text::ListStyle {
+/// What the notes master should be on save. A master we read is written back, including its
+/// header, footer, date and slide-number text. A deck that has never had one gets the placeholders
+/// we generate.
+struct NotesMasterWrite {
+    shapes: Vec<Shape>,
+    background: Option<Background>,
+    color_map: Vec<(String, String)>,
+    style: ListStyle,
+    theme: Option<Theme>,
+}
+
+fn notes_master_write(p: &Presentation) -> Option<NotesMasterWrite> {
+    let kept = p.notes_master.as_ref().filter(|m| !m.shapes.is_empty());
+    let has_notes = p.slides.iter().any(|s| !s.notes.is_empty());
+    if !has_notes && kept.is_none() {
+        return None;
+    }
+    Some(match kept {
+        Some(m) => NotesMasterWrite {
+            shapes: m.shapes.clone(),
+            background: m.background.clone(),
+            color_map: m.color_map.clone(),
+            style: if m.body_style.is_empty() { notes_style() } else { m.body_style.clone() },
+            theme: Some(m.theme.clone()),
+        },
+        None => NotesMasterWrite {
+            shapes: notes_master_shapes(p.notes_size),
+            background: Some(Background::Ref { idx: 1001, color: deckcraft_model::ColorRef::scheme(deckcraft_color::SchemeSlot::Bg1) }),
+            color_map: vec![],
+            style: notes_style(),
+            theme: None,
+        },
+    })
+}
+
+fn notes_style() -> ListStyle {
     let mut ls = deckcraft_model::text::ListStyle::default();
     for i in 0..9u8 {
         ls.set(
@@ -479,25 +516,24 @@ pub fn export(p: &Presentation, main_ct: &str) -> Result<Vec<u8>, PptxError> {
         master_rids.push((master_id, pres.rels.add("slideMaster", &opc::relative("ppt/presentation.xml", &mname), false)));
     }
 
-    // Notes master when any slide has notes.
-    let has_notes = p.slides.iter().any(|s| !s.notes.is_empty());
+    // Notes master when a slide has notes, or the file already has one (its header and footer
+    // live on the master, not on the notes slides).
     let notes_master = "ppt/notesMasters/notesMaster1.xml";
     let mut notes_master_rid = None;
-    if has_notes {
+    if let Some(nm) = notes_master_write(p) {
         let tname = format!("ppt/theme/theme{}.xml", p.masters.len() + 1);
         let mut no = Out::new(notes_master);
         no.rels.add("theme", &opc::relative(notes_master, &tname), false);
-        let theme = p.notes_master.as_ref().map(|m| m.theme.clone()).or_else(|| p.masters.first().map(|m| m.theme.clone())).unwrap_or_default();
+        let theme = nm.theme.or_else(|| p.masters.first().map(|m| m.theme.clone())).unwrap_or_default();
         let mut to = Out::new(&tname);
         let txml = theme::theme_xml(&mut x, &mut to, &theme);
         x.pkg.xml_part(&tname, CT_THEME, txml);
         x.pkg.rels(&tname, &to.rels);
         let mut w = W::new();
         root_open(&mut w, "p:notesMaster", A::new());
-        let bg = Background::Ref { idx: 1001, color: deckcraft_model::ColorRef::scheme(deckcraft_color::SchemeSlot::Bg1) };
-        csld(&mut w, &mut x, &mut no, "", Some(&bg), &notes_master_shapes(p.notes_size));
-        clr_map(&mut w, &[]);
-        dml::list_style(&mut w, &mut x, &mut no, "p:notesStyle", &notes_style());
+        csld(&mut w, &mut x, &mut no, "", nm.background.as_ref(), &nm.shapes);
+        clr_map(&mut w, &nm.color_map);
+        dml::list_style(&mut w, &mut x, &mut no, "p:notesStyle", &nm.style);
         w.close("p:notesMaster");
         x.pkg.xml_part(notes_master, CT_NOTES_MASTER, w.finish());
         x.pkg.rels(notes_master, &no.rels);
@@ -800,11 +836,99 @@ fn section_slides(p: &Presentation) -> Vec<(String, Vec<usize>)> {
     out
 }
 
+/// One embedded typeface, with the relationship id of each face that had bytes.
+struct WrittenFont {
+    typeface: String,
+    panose: Option<String>,
+    pitch_family: Option<u8>,
+    charset: Option<u8>,
+    regular: Option<String>,
+    bold: Option<String>,
+    italic: Option<String>,
+    bold_italic: Option<String>,
+}
+
+impl WrittenFont {
+    fn any(&self) -> bool {
+        self.regular.is_some() || self.bold.is_some() || self.italic.is_some() || self.bold_italic.is_some()
+    }
+}
+
+/// Font parts for `p:embeddedFontLst`. One part per distinct media item, named `ppt/fonts/fontN.fntdata`.
+fn write_embedded_fonts(x: &mut Exp, o: &mut Out) -> Vec<WrittenFont> {
+    struct Plan {
+        typeface: String,
+        panose: Option<String>,
+        pitch_family: Option<u8>,
+        charset: Option<u8>,
+        regular: Option<MediaId>,
+        bold: Option<MediaId>,
+        italic: Option<MediaId>,
+        bold_italic: Option<MediaId>,
+    }
+    let mut plans = Vec::new();
+    for font in x.p.embedded_fonts.iter().take(64) {
+        let typeface = font.typeface.trim();
+        if typeface.is_empty() {
+            continue;
+        }
+        plans.push(Plan {
+            typeface: typeface.chars().take(255).collect(),
+            panose: font.panose.clone().filter(|s| s.len() == 20 && s.chars().all(|c| c.is_ascii_hexdigit())),
+            pitch_family: font.pitch_family,
+            charset: font.charset,
+            regular: font.regular,
+            bold: font.bold,
+            italic: font.italic,
+            bold_italic: font.bold_italic,
+        });
+    }
+    let mut seen_part: HashMap<MediaId, String> = HashMap::new();
+    let mut n = 0u32;
+    let mut rel = |x: &mut Exp, o: &mut Out, id: Option<MediaId>| -> Option<String> {
+        let id = id?;
+        if let Some(rid) = seen_part.get(&id) {
+            return Some(rid.clone());
+        }
+        let m = x.p.media(id)?;
+        if m.data.is_empty() || m.data.len() > 32 * 1024 * 1024 {
+            return None;
+        }
+        let bytes = m.data.as_ref().clone();
+        n = n.saturating_add(1);
+        let name = format!("ppt/fonts/font{n}.fntdata");
+        x.pkg.binary(&name, "application/x-fontdata", bytes);
+        let rid = o.rels.add("font", &opc::relative("ppt/presentation.xml", &name), false);
+        seen_part.insert(id, rid.clone());
+        Some(rid)
+    };
+    let mut seen_face = Vec::new();
+    let mut out = Vec::new();
+    for font in plans {
+        let written = WrittenFont {
+            typeface: font.typeface,
+            panose: font.panose,
+            pitch_family: font.pitch_family,
+            charset: font.charset,
+            regular: rel(x, o, font.regular),
+            bold: rel(x, o, font.bold),
+            italic: rel(x, o, font.italic),
+            bold_italic: rel(x, o, font.bold_italic),
+        };
+        if written.any() && !seen_face.iter().any(|s| s == &written.typeface) {
+            seen_face.push(written.typeface.clone());
+            out.push(written);
+        }
+    }
+    out
+}
+
 fn presentation_xml(x: &mut Exp, o: &mut Out, masters: &[(u64, String)], notes: Option<&str>, slides: &[String]) -> Vec<u8> {
+    let fonts = write_embedded_fonts(x, o);
     let p = x.p;
     let mut w = W::new();
     let first = (p.first_slide_number != 1).then_some(p.first_slide_number.min(9999));
-    root_open(&mut w, "p:presentation", A::new().a("saveSubsetFonts", 1).o("firstSlideNum", first));
+    root_open(&mut w, "p:presentation", A::new().a("saveSubsetFonts", 1).t("embedTrueTypeFonts", !fonts.is_empty()).o("firstSlideNum", first));
     w.open0("p:sldMasterIdLst");
     for (id, rid) in masters {
         w.empty("p:sldMasterId", A::new().a("id", id).a("r:id", rid));
@@ -825,6 +949,23 @@ fn presentation_xml(x: &mut Exp, o: &mut Out, masters: &[(u64, String)], notes: 
     let clamp = |v: f64| dml::emu(v).clamp(914_400, 51_206_400);
     w.empty("p:sldSz", A::new().a("cx", clamp(p.slide_size.width)).a("cy", clamp(p.slide_size.height)));
     w.empty("p:notesSz", A::new().a("cx", dml::emu_pos(p.notes_size.width).max(1)).a("cy", dml::emu_pos(p.notes_size.height).max(1)));
+    if !fonts.is_empty() {
+        w.open0("p:embeddedFontLst");
+        for f in &fonts {
+            w.open0("p:embeddedFont");
+            w.empty(
+                "p:font",
+                A::new().a("typeface", &f.typeface).o("panose", f.panose.clone()).o("pitchFamily", f.pitch_family).o("charset", f.charset),
+            );
+            for (tag, rid) in [("p:regular", &f.regular), ("p:bold", &f.bold), ("p:italic", &f.italic), ("p:boldItalic", &f.bold_italic)] {
+                if let Some(rid) = rid {
+                    w.empty(tag, A::new().a("r:id", rid));
+                }
+            }
+            w.close("p:embeddedFont");
+        }
+        w.close("p:embeddedFontLst");
+    }
     if !p.custom_shows.is_empty() {
         w.open0("p:custShowLst");
         for (i, cs) in p.custom_shows.iter().enumerate() {

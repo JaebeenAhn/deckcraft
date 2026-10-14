@@ -15,7 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(noundo "file.saveAs", "Save As…", ["File"], Some("Cmd+Shift+S"), "{path, format?}", has_doc, save_as),
         cmd!(noundo "file.saveTemplate", "Save as Template…", ["File"], None, "{path}", has_doc, save_as),
         cmd!(query "file.saveBytes", "Save to Data", [], None, "{format?: deckcraft|pptx} → {data: base64}", has_doc, save_bytes_cmd),
-        cmd!(noundo "file.export", "Export…", ["File"], None, "{path, format: png|jpeg|pptx|deckcraft|outline|pdf, slide?: index, all?: bool, scale?: px per pt; pdf: layout?: slides|notes|handouts, perPage?: 1|2|3|4|6|9, dpi?, slides?: [index] | \"1-3,5\", includeHidden?, textLayer?, frame?}", has_doc, export),
+        cmd!(noundo "file.export", "Export…", ["File"], None, "{path, format: png|jpeg|pptx|deckcraft|outline|pdf, slide?: index, all?: bool, scale?: px per pt; pdf: layout?: slides|notes|handouts, perPage?: 1|2|3|4|6|9, paper?: letter|a4|legal|a3, orientation?: portrait|landscape, dpi?, slides?: [index] | \"1-3,5\", includeHidden?, textLayer?, frame?}", has_doc, export),
         cmd!(
             query "file.info",
             "Info",
@@ -74,9 +74,18 @@ fn new(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Recognise and read presentation bytes (native, PPTX).
 pub fn open_presentation(name: &str, bytes: &[u8]) -> Result<Presentation> {
+    open_checked(name, bytes).map(|(p, _)| p)
+}
+
+/// [`open_presentation`], plus the embedded media a `.deckcraft` file had lost or damaged.
+pub fn open_checked(name: &str, bytes: &[u8]) -> Result<(Presentation, Vec<String>)> {
     if deckcraft_format::sniff(bytes) {
-        return deckcraft_format::load(bytes).map_err(|e| EngineError::Other(e.to_string()));
+        return deckcraft_format::load_checked(bytes).map_err(|e| EngineError::Other(e.to_string()));
     }
+    open_other(name, bytes).map(|p| (p, vec![]))
+}
+
+fn open_other(name: &str, bytes: &[u8]) -> Result<Presentation> {
     if deckcraft_pptx::sniff(bytes) {
         let mut p = deckcraft_pptx::import(bytes).map_err(|e| EngineError::Other(e.to_string()))?;
         deckcraft_format::repair(&mut p);
@@ -104,6 +113,7 @@ pub fn open_presentation(name: &str, bytes: &[u8]) -> Result<Presentation> {
 
 pub fn add_opened(s: &mut Session, name: &str, path: Option<String>, p: Presentation) -> usize {
     let title = std::path::Path::new(name).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string());
+    crate::fonts::install_embedded_fonts(&p);
     let missing_fonts = crate::fonts::missing_fonts(&p);
     let mut st = DocState::new(p, path, title);
     st.missing_fonts = missing_fonts;
@@ -114,11 +124,15 @@ pub fn add_opened(s: &mut Session, name: &str, path: Option<String>, p: Presenta
 fn open(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path").ok_or_else(|| bad("file.open", "missing `path`"))?;
     let bytes = std::fs::read(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
-    let doc = open_presentation(path, &bytes)?;
+    let (doc, damaged) = open_checked(path, &bytes)?;
     let native = deckcraft_format::sniff(&bytes) || deckcraft_pptx::sniff(&bytes);
-    let i = add_opened(s, path, native.then(|| path.to_string()), doc);
+    // A damaged file opens as an untitled repaired copy, so Save can't overwrite the original
+    // with the empty media.
+    let keep_path = native && damaged.is_empty();
+    let i = add_opened(s, path, keep_path.then(|| path.to_string()), doc);
+    report_damage(s, &damaged)?;
     let st = s.doc()?;
-    Ok(json!({"document": i, "slides": st.doc.slides.len(), "missingFonts": st.missing_fonts}))
+    Ok(json!({"document": i, "slides": st.doc.slides.len(), "missingFonts": st.missing_fonts, "damagedMedia": damaged}))
 }
 #[cfg(target_arch = "wasm32")]
 fn open(_s: &mut Session, _p: &Value) -> Result<Value> {
@@ -128,9 +142,28 @@ fn open(_s: &mut Session, _p: &Value) -> Result<Value> {
 fn open_bytes(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").unwrap_or("Presentation");
     let data = str_param(p, "data").and_then(base64_decode).ok_or_else(|| bad("file.openBytes", "missing or invalid base64 `data`"))?;
-    let doc = open_presentation(name, &data)?;
+    let (doc, damaged) = open_checked(name, &data)?;
     let i = add_opened(s, name, None, doc);
-    Ok(json!({"document": i, "missingFonts": s.doc()?.missing_fonts}))
+    report_damage(s, &damaged)?;
+    Ok(json!({"document": i, "missingFonts": s.doc()?.missing_fonts, "damagedMedia": damaged}))
+}
+
+/// Tell the user which pictures and media a damaged file lost, and mark the copy repaired.
+fn report_damage(s: &mut Session, damaged: &[String]) -> Result<()> {
+    if damaged.is_empty() {
+        return Ok(());
+    }
+    let st = s.doc_mut()?;
+    st.title = format!("{} (Repaired)", st.title);
+    let n = damaged.len();
+    let text = format!(
+        "{n} picture{} or media file{} in this presentation couldn't be read and {} empty. It was opened as a repaired copy; save it under a new name to keep the original file.",
+        if n == 1 { "" } else { "s" },
+        if n == 1 { "" } else { "s" },
+        if n == 1 { "is" } else { "are" },
+    );
+    s.ui_requests.push(crate::UiRequest::Message { text });
+    Ok(())
 }
 
 /// Encode the presentation in `format` (`deckcraft`, `pptx`, `potx`, `ppsx`, `outline`, `pdf`).
@@ -143,8 +176,11 @@ pub fn save_bytes(doc: &Presentation, format: &str) -> Result<Vec<u8>> {
     }
 }
 
+/// Paper sizes for notes and handouts, for the UI's Print page.
+pub use deckcraft_pdf::{PAPERS, paper_size};
+
 /// PDF options from command params: `{layout: slides|notes|handouts, perPage, dpi, slides,
-/// includeHidden, textLayer, frame}` for a presentation of `count` slides. `slides` is a list of
+/// includeHidden, textLayer, frame, paper: letter|a4|legal|a3, orientation: portrait|landscape}` for a presentation of `count` slides. `slides` is a list of
 /// 0-based indices or a range as typed in PowerPoint's Print page (`"1-3, 5"`, 1-based).
 pub fn pdf_options(p: &Value, count: usize) -> Result<deckcraft_pdf::PdfOptions> {
     let mut o = deckcraft_pdf::PdfOptions { layout: deckcraft_pdf::PageLayout::Slides, ..Default::default() };
@@ -162,6 +198,16 @@ pub fn pdf_options(p: &Value, count: usize) -> Result<deckcraft_pdf::PdfOptions>
     o.include_hidden = bool_or(p, "includeHidden", false);
     o.text_layer = bool_or(p, "textLayer", true);
     o.frame_slides = bool_or(p, "frame", true);
+    let landscape = match str_param(p, "orientation").unwrap_or("portrait") {
+        "portrait" => false,
+        "landscape" => true,
+        other => return Err(bad("file.export", format!("orientation “{other}” isn't portrait or landscape"))),
+    };
+    let paper = str_param(p, "paper").unwrap_or("letter");
+    o.paper = deckcraft_pdf::paper_size(paper, landscape).ok_or_else(|| {
+        let ids: Vec<&str> = deckcraft_pdf::PAPERS.iter().map(|p| p.0).collect();
+        bad("file.export", format!("paper “{paper}” isn't one of {}", ids.join(", ")))
+    })?;
     Ok(o)
 }
 
@@ -283,10 +329,19 @@ fn save_bytes_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"data": base64_encode(&bytes), "bytes": bytes.len()}))
 }
 
+/// `scale` for rendering `doc`'s slides to an image: within 0.01–16, and small enough that the
+/// slide fits the renderer's largest picture ([`deckcraft_render::MAX_SIDE`]). Past that the
+/// renderer clips, so a 4× export of a 4032 pt slide came out cropped to its first 16,000 pixels.
+pub fn image_scale(doc: &Presentation, scale: f64) -> f64 {
+    let scale = if scale.is_finite() { scale.clamp(0.01, 16.0) } else { 1.0 };
+    let longest = doc.slide_size.width.max(doc.slide_size.height).max(1.0);
+    scale.min(f64::from(deckcraft_render::MAX_SIDE) / longest)
+}
+
 /// Render slide `index` (current when absent) to PNG bytes.
 pub fn render_png(doc: &Presentation, index: usize, scale: f64, edit: bool) -> (Vec<u8>, u32, u32) {
     let img =
-        deckcraft_render::render_slide(doc, index, &deckcraft_render::RenderOpts { scale: scale.clamp(0.01, 16.0), edit, ..Default::default() });
+        deckcraft_render::render_slide(doc, index, &deckcraft_render::RenderOpts { scale: image_scale(doc, scale), edit, ..Default::default() });
     (img.to_png(), img.width, img.height)
 }
 
@@ -335,16 +390,14 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 None if bool_or(p, "all", false) => (0..st.doc.slides.len()).collect(),
                 None => vec![st.selection.slide],
             };
+            // Every slide checked before any file is written, so a bad index leaves nothing behind.
+            if let Some(i) = slides.iter().find(|i| **i >= st.doc.slides.len()) {
+                return Err(bad("file.export", format!("no slide {i}")));
+            }
+            let scale = image_scale(&st.doc, scale);
             let mut written = vec![];
             for (k, i) in slides.iter().enumerate() {
-                if *i >= st.doc.slides.len() {
-                    return Err(bad("file.export", format!("no slide {i}")));
-                }
-                let img = deckcraft_render::render_slide(
-                    &st.doc,
-                    *i,
-                    &deckcraft_render::RenderOpts { scale: scale.clamp(0.01, 16.0), ..Default::default() },
-                );
+                let img = deckcraft_render::render_slide(&st.doc, *i, &deckcraft_render::RenderOpts { scale, ..Default::default() });
                 let bytes = if format == "png" { img.to_png() } else { img.to_jpeg(92) };
                 let out = if slides.len() == 1 {
                     path.clone()
@@ -354,7 +407,9 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
                     let ext = pth.extension().map(|x| x.to_string_lossy().to_string()).unwrap_or_else(|| format.clone());
                     pth.with_file_name(format!("{stem}{}.{ext}", k + 1)).to_string_lossy().to_string()
                 };
-                write_file(&out, &bytes)?;
+                // Say which slides made it when one can't be written (disk full part-way).
+                write_file(&out, &bytes)
+                    .map_err(|e| if written.is_empty() { e } else { EngineError::Other(format!("{e} (slides 1–{k} were written)")) })?;
                 written.push(out);
             }
             Ok(json!({"files": written}))

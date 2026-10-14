@@ -107,6 +107,9 @@ pub struct UiState {
     /// Format Shape pane: tab (`fill`, `effects`, `size`, `picture`, `text`).
     pub format_tab: String,
     pub grayscale: bool,
+    /// Comment the Review Previous/Next buttons last landed on: `(slide, index)`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment_focus: Option<(usize, usize)>,
 }
 
 impl Default for UiState {
@@ -133,6 +136,7 @@ impl Default for UiState {
             ui_scale: 1.0,
             format_tab: "fill".into(),
             grayscale: false,
+            comment_focus: None,
         }
     }
 }
@@ -174,7 +178,12 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.home", "Home", None, "{on?}"),
     ("app.backstage", "File", Some("Alt+F"), "{page?: home|new|open|info|saveAs|print|export|account, on?: bool}"),
     ("app.closePresentation", "Close", Some("Cmd+W"), "{}"),
-    ("app.print", "Print", Some("Cmd+P"), "{layout?, perPage?, slides?, includeHidden?, frame?}"),
+    (
+        "app.print",
+        "Print",
+        Some("Cmd+P"),
+        "{layout?, perPage?, slides?, includeHidden?, frame?, paper?: letter|a4|legal|a3, orientation?: portrait|landscape}",
+    ),
     ("app.about", "About DeckCraft", None, "{}"),
     ("app.palette", "Command Palette", Some("Cmd+Shift+P"), "{}"),
     ("app.preferences", "Preferences…", Some("Cmd+,"), "{}"),
@@ -186,6 +195,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.saveAsDialog", "Save As…", None, "{}"),
     ("app.exportDialog", "Export…", None, "{}"),
     ("app.dialog", "Open Dialog", None, "{id}"),
+    ("app.pasteSpecial", "Paste Special…", Some("Cmd+Alt+V"), "{}"),
     ("app.links", "Community Links", None, "{}"),
 ];
 
@@ -593,6 +603,7 @@ impl SlideApp {
             "app.insertVideoDialog" => self.pick_and_insert("video", "insert.video"),
             "app.saveAsDialog" => self.save_as_dialog("deckcraft"),
             "app.exportDialog" => self.dialog = Some(dialogs::Dialog::new("export")),
+            "app.pasteSpecial" => self.dialog = Some(dialogs::Dialog::new("pasteSpecial")),
             "app.dialog" => {
                 let d = p.get("id").and_then(Value::as_str).ok_or("missing `id`")?;
                 self.dialog = Some(dialogs::Dialog::new(d));
@@ -632,6 +643,13 @@ impl SlideApp {
         self.ui.recent.truncate(12);
         self.ui.view = ViewMode::Normal;
         Ok(())
+    }
+
+    /// Transitions › Sound › Other Sound…: pick an audio file for the selected slides.
+    pub(crate) fn pick_transition_sound(&mut self) {
+        if self.services.pick_open.is_some() {
+            self.pick_and_insert("audio", "transition.sound");
+        }
     }
 
     fn pick_and_insert(&mut self, purpose: &str, cmd: &str) {
@@ -1199,6 +1217,8 @@ fn js_now() -> f64 {
 mod eyedropper_tests;
 #[cfg(test)]
 mod ime_tests;
+#[cfg(test)]
+mod ui_soak_tests;
 
 #[cfg(test)]
 mod tests {

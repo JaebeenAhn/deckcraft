@@ -1,5 +1,5 @@
 //! Shape trees: `p:sp`, `p:pic`, `p:grpSp`, `p:cxnSp`, `p:graphicFrame` (tables, charts, SmartArt,
-//! OLE and other objects).
+//! OLE and other objects) and `p:contentPart` (3-D models).
 
 use std::collections::{HashMap, HashSet};
 
@@ -70,10 +70,11 @@ pub fn sp_tree(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, tree: &El, depth: us
             "grpSp" => Some(grp(imp, part, ctx, e, depth)),
             "cxnSp" => Some(cxn(imp, part, ctx, e)),
             "graphicFrame" => Some(frame(imp, part, ctx, e, depth)),
-            "contentPart" => {
-                log::warn!("pptx: ink content part in {} not imported", part.name);
+            "contentPart" => content_part(imp, part, ctx, e).or_else(|| {
+                log::warn!("pptx: content part in {} not imported", part.name);
                 None
-            }
+            }),
+            "AlternateContent" => read_model_alternate(imp, part, ctx, e),
             _ => None,
         };
         if let Some(s) = s {
@@ -279,6 +280,58 @@ fn ms(v: Option<&str>) -> u32 {
     v.and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, u32::MAX as f64) as u32).unwrap_or(0)
 }
 
+fn find_content_part(el: &El) -> Option<&El> {
+    fn rec(el: &El, depth: usize) -> Option<&El> {
+        if depth > 16 {
+            return None;
+        }
+        if el.is("contentPart") {
+            return Some(el);
+        }
+        el.elements().find_map(|c| rec(c, depth + 1))
+    }
+    rec(el, 0)
+}
+
+/// `p:contentPart` whose relationship is a 3-D model. Other content parts (ink) are left out.
+fn content_part(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El) -> Option<Shape> {
+    let id = e.attr("r:id").filter(|s| !s.is_empty())?;
+    let rel = part.rels.get(id)?;
+    if !super::is_model3d(rel) {
+        return None;
+    }
+    let target = rel.target.clone();
+    let media = imp.media_for(&target).or_else(|| {
+        log::warn!("pptx: 3-D model part missing in {}", part.name);
+        None
+    })?;
+    let mut s = base(imp, part, ctx, e.child("nvContentPartPr"));
+    if let Some(x) = e.child("xfrm") {
+        s.xfrm = Some(dml::xfrm(x).0);
+    }
+    s.kind = ShapeKind::Model3d { media, poster: None };
+    Some(s)
+}
+
+/// A 3-D model wrapped in `mc:AlternateContent`: the model choice, plus the fallback picture.
+/// If the model part is missing, the fallback picture is the shape.
+fn read_model_alternate(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El) -> Option<Shape> {
+    if let Some(content) = e.children_named("Choice").find_map(find_content_part)
+        && let Some(mut s) = content_part(imp, part, ctx, content)
+    {
+        let poster = e.child("Fallback").and_then(|fb| {
+            let mut pics = vec![];
+            fb.find_all("blip", &mut pics);
+            pics.into_iter().find_map(|b| dml::media_ref(imp, part, b))
+        });
+        if let ShapeKind::Model3d { media, .. } = s.kind {
+            s.kind = ShapeKind::Model3d { media, poster };
+        }
+        return Some(s);
+    }
+    e.child("Fallback").and_then(|fb| fb.elements().find(|c| c.is("pic")).map(|p| pic(imp, part, ctx, p)))
+}
+
 fn pic(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El) -> Shape {
     let mut s = base(imp, part, ctx, e.child("nvPicPr"));
     if let Some(pr) = e.child("spPr") {
@@ -367,7 +420,7 @@ fn frame(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El, depth: usize) -> S
         }
         if let Some(c) = gd.child("chart")
             && let Some(rel) = part.rels.get(c.attr("r:id").unwrap_or(""))
-            && let Some(bytes) = imp.pkg.get(&rel.target)
+            && let Some(bytes) = imp.pkg.xml_bytes(&rel.target)
             && let Some(chart) = super::read_chart_xml(bytes)
         {
             s.kind = ShapeKind::Chart(Box::new(chart));
@@ -403,15 +456,37 @@ fn frame(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El, depth: usize) -> S
 /// `v:imagedata` of the legacy VML drawing shape with that id, as PowerPoint 2007 wrote them.
 fn vml_preview(imp: &mut Imp, part: &Part, spid: &str) -> Option<deckcraft_model::MediaId> {
     for rel in part.rels.items.iter().filter(|r| r.kind == "vmlDrawing" && !r.external) {
-        let Some(doc) = imp.pkg.xml(&rel.target) else { continue };
-        let mut shapes = vec![];
-        doc.root.find_all("shape", &mut shapes);
-        let Some(img) = shapes.into_iter().find(|s| s.attr("id") == Some(spid)).and_then(|s| s.find("imagedata")) else { continue };
-        let Some(id) = img.attr("o:relid").or(img.attr("r:id")) else { continue };
-        let target = imp.pkg.rels(&rel.target).get(id).filter(|r| !r.external).map(|r| r.target.clone())?;
+        let key = crate::opc::norm(&rel.target);
+        if !imp.vml_previews.contains_key(&key) {
+            let index = vml_index(imp.pkg, &rel.target);
+            imp.vml_previews.insert(key.clone(), index);
+        }
+        let Some(target) = imp.vml_previews.get(&key).and_then(|m| m.get(spid)).cloned() else { continue };
         return imp.media_for(&target);
     }
     None
+}
+
+/// Every shape id in a VML drawing with a picture, mapped to that picture's part: parsed once per
+/// drawing however many objects look it up.
+fn vml_index(pkg: &crate::opc::Package, vml: &str) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    let Some(doc) = pkg.xml(vml) else { return out };
+    let rels = pkg.rels(vml);
+    let mut shapes = vec![];
+    doc.root.find_all("shape", &mut shapes);
+    for s in shapes {
+        let Some(id) = s.attr("id") else { continue };
+        if out.contains_key(id) {
+            continue; // the first shape with an id wins, as the old lookup did
+        }
+        let Some(img) = s.find("imagedata") else { continue };
+        let Some(rid) = img.attr("o:relid").or(img.attr("r:id")) else { continue };
+        if let Some(r) = rels.get(rid).filter(|r| !r.external) {
+            out.insert(id.to_string(), r.target.clone());
+        }
+    }
+    out
 }
 
 /// SmartArt: read the pre-drawn shapes of its drawing part as a group.

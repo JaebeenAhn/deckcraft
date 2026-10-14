@@ -121,6 +121,28 @@ fn invalid_id_never_falls_back_to_selection() {
 }
 
 #[test]
+fn unknown_tool_arguments_are_refused() {
+    let mut s = Server::new(Box::new(Headless::new()));
+    tool(&mut s, "new_presentation", json!({}));
+    let charts = |v: &Value| v["shapes"].as_array().unwrap().iter().filter(|sh| sh["kind"] == "chart").count();
+    let before = charts(&tool(&mut s, "inspect_slide", json!({})));
+    let r = call(&mut s, 2, "tools/call", json!({"name": "insert_chart", "arguments": {"type": "column", "data": [["x", "A"], ["q1", 1]]}}));
+    assert_eq!(r["result"]["isError"], true);
+    let msg = r["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(msg.contains("unknown argument \"data\"") && msg.contains("categories") && msg.contains("series"), "{msg}");
+    assert_eq!(charts(&tool(&mut s, "inspect_slide", json!({}))), before, "a refused call inserts nothing");
+    let r = call(&mut s, 3, "tools/call", json!({"name": "list_commands", "arguments": {"query": "theme", "limit": 1}}));
+    assert_eq!(r["result"]["isError"], true);
+    let msg = r["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(msg.contains("unknown arguments \"limit\", \"query\"") && msg.contains("filter"), "{msg}");
+    // The command's own parameters stay inside `params`.
+    tool(&mut s, "run_command", json!({"command": "slide.new", "params": {"layout": "blank"}}));
+    let tools = call(&mut s, 4, "tools/list", json!({}));
+    let chart = tools["result"]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "insert_chart").unwrap();
+    assert_eq!(chart["inputSchema"]["additionalProperties"], false);
+}
+
+#[test]
 fn errors_are_reported_not_panics() {
     let mut s = Server::new(Box::new(Headless::new()));
     let r = call(&mut s, 1, "tools/call", json!({"name": "run_command", "arguments": {"command": "no.such"}}));
@@ -164,7 +186,7 @@ fn export_tool_lists_pdf_and_its_options() {
     }
     assert_eq!(props["layout"]["enum"], json!(["slides", "notes", "handouts"]));
     assert_eq!(props["perPage"]["enum"], json!([1, 2, 3, 4, 6, 9]));
-    for p in ["dpi", "slides", "includeHidden", "textLayer", "frame"] {
+    for p in ["dpi", "slides", "includeHidden", "textLayer", "frame", "paper", "orientation"] {
         assert!(props.get(p).is_some(), "{p}: {export}");
     }
     // What the schema describes is accepted.
@@ -173,7 +195,11 @@ fn export_tool_lists_pdf_and_its_options() {
     tool(&mut s, "new_presentation", json!({}));
     for layout in ["slides", "notes", "handouts"] {
         let path = dir.join(format!("{layout}.pdf"));
-        tool(&mut s, "export", json!({"path": path.to_string_lossy(), "format": "pdf", "layout": layout, "perPage": 3}));
+        tool(
+            &mut s,
+            "export",
+            json!({"path": path.to_string_lossy(), "format": "pdf", "layout": layout, "perPage": 3, "paper": "a4", "orientation": "landscape"}),
+        );
         assert!(std::fs::read(&path).unwrap().starts_with(b"%PDF"), "{layout}");
     }
     let _ = std::fs::remove_dir_all(&dir);

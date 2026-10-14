@@ -16,6 +16,10 @@
 100% Stacked Bar	Słupkowy 100% skumulowany
 100% Stacked Column	Kolumnowy 100% skumulowany
 35mm Slides	Slajdy 35 mm
+4 Point Star	Gwiazda 4-ramienna
+5 Point Star	Gwiazda 5-ramienna
+6 Point Star	Gwiazda 6-ramienna
+8 Point Star	Gwiazda 8-ramienna
 @ribbon:Home	Narzędzia główne
 @ribbon:Insert	Wstawianie
 @{}: {} PRs, {} commits, +{} / −{} lines (Δ {}), +{} / −{} binary assets, {} – {}	@{}: {} PR-ów, {} commitów, +{} / −{} wierszy (Δ {}), +{} / −{} zasobów binarnych, {} – {}
@@ -49,6 +53,8 @@ Action Button: Video	Przycisk akcji: wideo
 Action Button: {k}	Przycisk akcji: {k}
 Action Buttons	Przyciski akcji
 Add Animation	Dodaj animację
+Add Font	Dodaj czcionkę
+Add Point	Dodaj punkt
 Add Section	Dodaj sekcję
 Add\nAnimation	Dodaj\nanimację
 Address:	Adres:
@@ -81,6 +87,7 @@ Play/Pause GIF	Odtwórz/wstrzymaj GIF
 Animations on Slide	Animacje na slajdzie
 Appear	Pojawienie się
 Apply	Zastosuj
+Apply Design Idea	Zastosuj pomysł projektowy
 Apply To All	Zastosuj do wszystkich
 Apply to All	Zastosuj do wszystkich
 Apply\nTo All	Zastosuj\ndo wszystkich
@@ -1245,6 +1252,9 @@ Arrow: Curved Left	Strzałka: zakrzywiona w lewo
 Arrow: Curved Right	Strzałka: zakrzywiona w prawo
 Arrow: Curved Up	Strzałka: zakrzywiona w górę
 Arrow: Swoosh	Strzałka: łukowa
+Bean	Fasola
+Bounce Left	Odbicie w lewo
+Bounce Right	Odbicie w prawo
 Callout: Bent Line	Objaśnienie: linia łamana
 Callout: Bent Line with Accent Bar	Objaśnienie: linia łamana z paskiem wyróżnienia
 Callout: Bent Line with Border and Accent Bar	Objaśnienie: linia łamana z obramowaniem i paskiem wyróżnienia
@@ -1281,36 +1291,76 @@ Print	Drukuj
 Info	Informacje
 Print…	Drukuj…
 Counterclockwise	Przeciwnie do ruchu wskazówek zegara
+Crescent Moon	Półksiężyc
+Curved Square	Zaokrąglony kwadrat
+Decaying Wave	Fala gasnąca
+Delete Point	Usuń punkt
+Diagonal Down Right	Po przekątnej w dół w prawo
+Diagonal Up Right	Po przekątnej w górę w prawo
 Diamonds From Bottom	Romby od dołu
 Diamonds From Left	Romby od lewej
 Diamonds From Right	Romby od prawej
 Diamonds From Top	Romby od góry
 Double Left	Podwójnie do lewej
 Double Right	Podwójnie do prawej
+Edit Points	Edytuj punkty
+Football	Piłka owalna
 From Bottom-Left	Od lewego dolnego rogu
 From Bottom-Right	Od prawego dolnego rogu
 From Top-Left	Od lewego górnego rogu
 From Top-Right	Od prawego górnego rogu
+Heartbeat	Bicie serca
 Hexagons From Bottom	Sześciokąty od dołu
 Hexagons From Left	Sześciokąty od lewej
 Hexagons From Right	Sześciokąty od prawej
 Hexagons From Top	Sześciokąty od góry
+Horizontal Figure 8	Pozioma ósemka
 Horizontal In	Poziomo do środka
 Horizontal Out	Poziomo na zewnątrz
+Icon Gallery	Galeria ikon
 In with Bounce	Do środka z odbiciem
+Loop de Loop	Pętla w pętli
+Move Handle	Przesuń uchwyt
+Move Point	Przesuń punkt
+Neutron	Neutron
+Next Comment	Następny komentarz
+No comments.	Brak komentarzy.
+No icons match.	Brak pasujących ikon.
 Out with Bounce	Na zewnątrz z odbiciem
 Particles In	Cząsteczki do środka
 Particles Out	Cząsteczki na zewnątrz
+Paste Special	Wklej specjalnie
+Paste Special…	Wklej specjalnie…
+Peanut	Orzeszek ziemny
+Pick a design for this slide. Ideas are generated on your device.	Wybierz projekt dla tego slajdu. Pomysły są generowane na Twoim urządzeniu.
+Point Type	Typ punktu
+Points	Punkty
+Previous Comment	Poprzedni komentarz
+Rescan Installed Fonts	Wyszukaj ponownie zainstalowane czcionki
+S Curve 1	Krzywa S 1
+S Curve 2	Krzywa S 2
+Sine Wave	Sinusoida
 Single Left	Pojedynczo do lewej
 Single Right	Pojedynczo do prawej
+Size and Position…	Rozmiar i położenie…
 Smoothly From Left	Płynnie od lewej
 Smoothly From Right	Płynnie od prawej
+Sound	Dźwięk
+Spiral Left	Spirala w lewo
+Spiral Right	Spirala w prawo
+Spring	Sprężyna
+Stairs Down	Schody w dół
 Strips In	Paski do środka
 Strips Out	Paski na zewnątrz
+Swoosh	Zamach
+Text Transform	Przekształcenie tekstu
+Text Transparency	Przezroczystość tekstu
 Through Black From Left	Przez czerń od lewej
 Through Black From Right	Przez czerń od prawej
+Vertical Figure 8	Pionowa ósemka
 Vertical In	Pionowo do środka
 Vertical Out	Pionowo na zewnątrz
+Zigzag	Zygzak
 Zoom and Rotate	Powiększenie i obrót
 circle	okrąg
 diamond	romb

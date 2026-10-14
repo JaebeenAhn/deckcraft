@@ -82,6 +82,8 @@ pub fn rich_deck() -> Presentation {
                                 action: Action::Url { url: "https://example.org/a?b=1&c=2".into() },
                                 tooltip: "tip".into(),
                                 highlight_click: false,
+                                sound: None,
+                                stop_sound: false,
                             }),
                             ..Default::default()
                         },
@@ -153,7 +155,7 @@ pub fn rich_deck() -> Presentation {
         }],
         ..Default::default()
     });
-    b.click = Some(Hyperlink { action: Action::NextSlide, tooltip: String::new(), highlight_click: true });
+    b.click = Some(Hyperlink { action: Action::NextSlide, tooltip: String::new(), highlight_click: true, sound: None, stop_sound: false });
     let mut c = shape(&mut p, "Freeform", 450.0, 120.0, 100.0, 100.0);
     c.geom = Geom::Custom {
         paths: vec![CustomPath {
@@ -336,7 +338,8 @@ pub fn rich_deck() -> Presentation {
     let target = p.slides[1].id;
     let mut link = shape(&mut p, "Go to shapes", 600.0, 450.0, 200.0, 40.0);
     link.text = Some(TextBody::from_text("Back to shapes"));
-    link.click = Some(Hyperlink { action: Action::Slide { slide: target }, tooltip: String::new(), highlight_click: false });
+    link.click =
+        Some(Hyperlink { action: Action::Slide { slide: target }, tooltip: String::new(), highlight_click: false, sound: None, stop_sound: false });
     let mut eq = shape(&mut p, "Equation", 100.0, 450.0, 300.0, 40.0);
     eq.text = Some(TextBody {
         paragraphs: vec![Paragraph {
@@ -1103,4 +1106,272 @@ fn float_down_is_preset_47_both_ways() {
     let q = deckcraft_pptx::import(&bytes).expect("import");
     let got: Vec<(&str, &str)> = q.slides[1].animations.iter().map(|a| (a.effect.as_str(), a.option.as_str())).collect();
     assert_eq!(got, [("float", "d"), ("floatOut", "d"), ("floatOut", "u")]);
+}
+
+#[test]
+fn embedded_fonts_round_trip() {
+    let mut p = Presentation::default();
+    let regular = p.add_media("font1.fntdata", "application/x-fontdata", b"REGULAR-FONT-BYTES-0123456789".to_vec());
+    let bold = p.add_media("font2.fntdata", "application/x-fontdata", b"BOLD-FONT-BYTES-0123456789abcd".to_vec());
+    p.embedded_fonts.push(deckcraft_model::EmbeddedFont {
+        typeface: "Deck Test Face".into(),
+        panose: Some("020B0604020202020204".into()),
+        pitch_family: Some(34),
+        charset: Some(0),
+        regular: Some(regular),
+        bold: Some(bold),
+        italic: Some(regular),
+        bold_italic: None,
+    });
+    // The same typeface again is one entry: PowerPoint requires each typeface once.
+    p.embedded_fonts.push(deckcraft_model::EmbeddedFont { typeface: "Deck Test Face".into(), regular: Some(bold), ..Default::default() });
+    let bytes = deckcraft_pptx::export(&p).expect("export");
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.clone())).expect("zip");
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("ppt/presentation.xml").expect("pres"), &mut xml).expect("read");
+    assert!(xml.contains("embedTrueTypeFonts=\"1\""));
+    let notes = xml.find("<p:notesSz").expect("notesSz");
+    let list = xml.find("<p:embeddedFontLst>").expect("list");
+    let dts = xml.find("<p:defaultTextStyle").expect("style");
+    assert!(notes < list && list < dts);
+    assert!(xml.contains(r#"<p:font typeface="Deck Test Face" panose="020B0604020202020204" pitchFamily="34" charset="0"/>"#));
+    assert_eq!(xml.matches("<p:embeddedFont>").count(), 1);
+    let mut rels = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("ppt/_rels/presentation.xml.rels").expect("rels"), &mut rels).expect("read");
+    assert_eq!(rels.matches("relationships/font").count(), 2, "regular and italic share one part");
+    let q = deckcraft_pptx::import(&bytes).expect("import");
+    assert_eq!(q.embedded_fonts.len(), 1);
+    let f = &q.embedded_fonts[0];
+    assert_eq!(f.typeface, "Deck Test Face");
+    assert_eq!(f.panose.as_deref(), Some("020B0604020202020204"));
+    assert_eq!(f.pitch_family, Some(34));
+    assert_eq!(f.charset, Some(0));
+    assert_eq!(q.media(f.regular.expect("regular")).expect("media").data.as_slice(), b"REGULAR-FONT-BYTES-0123456789");
+    assert_eq!(q.media(f.bold.expect("bold")).expect("media").data.as_slice(), b"BOLD-FONT-BYTES-0123456789abcd");
+    assert_eq!(f.italic, f.regular);
+    assert!(f.bold_italic.is_none());
+}
+
+/// A package whose font list this writer did not produce: bold only, relationship id not `rIdN`.
+#[test]
+fn an_embedded_font_list_already_in_the_package_is_read() {
+    let bytes = deckcraft_pptx::export(&Presentation::default()).expect("export");
+    let font = b"FACE-BYTES-FROM-THE-PACKAGE";
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("zip");
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for i in 0..zip.len() {
+        let mut f = zip.by_index(i).expect("entry");
+        let name = f.name().to_string();
+        let mut data = vec![];
+        std::io::Read::read_to_end(&mut f, &mut data).expect("read");
+        if name == "ppt/presentation.xml" {
+            let xml = String::from_utf8(data).expect("utf8");
+            let xml = xml.replacen(
+                "<p:defaultTextStyle",
+                concat!(
+                    r#"<p:embeddedFontLst><p:embeddedFont><p:font typeface="Package Face" pitchFamily="2"/>"#,
+                    r#"<p:bold r:id="rIdFont"/></p:embeddedFont></p:embeddedFontLst><p:defaultTextStyle"#
+                ),
+                1,
+            );
+            data = xml.into_bytes();
+        } else if name == "ppt/_rels/presentation.xml.rels" {
+            let xml = String::from_utf8(data).expect("utf8");
+            let xml = xml.replacen(
+                "</Relationships>",
+                r#"<Relationship Id="rIdFont" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/font1.fntdata"/></Relationships>"#,
+                1,
+            );
+            data = xml.into_bytes();
+        } else if name == "[Content_Types].xml" {
+            let xml = String::from_utf8(data).expect("utf8");
+            let xml = xml.replacen("</Types>", r#"<Default Extension="fntdata" ContentType="application/x-fontdata"/></Types>"#, 1);
+            data = xml.into_bytes();
+        }
+        out.start_file(name, zip::write::SimpleFileOptions::default()).expect("start");
+        std::io::Write::write_all(&mut out, &data).expect("write");
+    }
+    out.start_file("ppt/fonts/font1.fntdata", zip::write::SimpleFileOptions::default()).expect("font");
+    std::io::Write::write_all(&mut out, font).expect("font bytes");
+    let patched = out.finish().expect("finish").into_inner();
+    let p = deckcraft_pptx::import(&patched).expect("import");
+    let f = p.embedded_fonts.first().expect("font");
+    assert_eq!(f.typeface, "Package Face");
+    assert_eq!(f.pitch_family, Some(2));
+    assert!(f.panose.is_none() && f.regular.is_none() && f.italic.is_none() && f.bold_italic.is_none());
+    assert_eq!(p.media(f.bold.expect("bold")).expect("media").data.as_slice(), font);
+}
+
+/// Text transparency (#32) is `a:alpha` on the run's colour, and survives a save.
+#[test]
+fn text_transparency_round_trips() {
+    use deckcraft_engine::Session;
+    let mut s = Session::with_new();
+    s.execute("shape.insert", &serde_json::json!({"preset": "rect", "rect": [100, 100, 200, 100], "text": "Hi"})).unwrap();
+    s.execute("format.color", &serde_json::json!({"color": "#336699"})).unwrap();
+    s.execute("format.textTransparency", &serde_json::json!({"value": 0.4})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let bytes = deckcraft_pptx::export(&doc).unwrap();
+    let back = deckcraft_pptx::import(&bytes).unwrap();
+    let sh = back.slides[0].shapes.iter().find(|sh| sh.text.as_ref().is_some_and(|t| t.text().contains("Hi"))).unwrap();
+    let Some(deckcraft_model::Fill::Solid { color }) = &sh.text.as_ref().unwrap().paragraphs[0].runs[0].props.fill else { panic!() };
+    assert!((color.alpha() - 0.6).abs() < 1e-9, "{color:?}");
+}
+
+/// A tiny 8 kHz mono 16-bit WAV of `n` silent samples.
+fn wav(n: u32) -> Vec<u8> {
+    let mut v = Vec::new();
+    v.extend_from_slice(b"RIFF");
+    v.extend_from_slice(&(36 + n * 2).to_le_bytes());
+    v.extend_from_slice(b"WAVEfmt ");
+    v.extend_from_slice(&16u32.to_le_bytes());
+    v.extend_from_slice(&1u16.to_le_bytes());
+    v.extend_from_slice(&1u16.to_le_bytes());
+    v.extend_from_slice(&8000u32.to_le_bytes());
+    v.extend_from_slice(&16000u32.to_le_bytes());
+    v.extend_from_slice(&2u16.to_le_bytes());
+    v.extend_from_slice(&16u16.to_le_bytes());
+    v.extend_from_slice(b"data");
+    v.extend_from_slice(&(n * 2).to_le_bytes());
+    v.resize(v.len() + n as usize * 2, 0);
+    v
+}
+
+/// Transitions › Sound: a chosen sound is embedded, saved as `p:sndAc`, read back, and No Sound
+/// removes it; a file that isn't audio is refused.
+#[test]
+fn transition_sound_is_set_saved_and_removed() {
+    use deckcraft_engine::Session;
+    use serde_json::json;
+    let b64 = deckcraft_engine::cmd::base64_encode(&wav(800));
+    let mut s = Session::with_new();
+    s.execute("transition.set", &json!({"kind": "fade"})).unwrap();
+    let r = s.execute("transition.sound", &json!({"data": b64, "name": "chime.wav"})).unwrap();
+    assert_eq!(r["playable"], true, "{r}");
+    let doc = s.doc().unwrap().doc.clone();
+    let m = doc.slides[0].transition.as_ref().and_then(|t| t.sound).expect("sound set");
+    assert_eq!(doc.media(m).map(|i| i.name.as_str()), Some("chime.wav"));
+    let bytes = deckcraft_pptx::export(&doc).unwrap();
+    let back = deckcraft_pptx::import(&bytes).unwrap();
+    let t = back.slides[0].transition.as_ref().expect("transition");
+    assert_eq!(t.kind, "fade");
+    let m = t.sound.expect("sound survives the save");
+    assert_eq!(back.media(m).map(|i| i.data.len()), Some(wav(800).len()));
+    s.execute("transition.sound", &json!({"none": true})).unwrap();
+    assert!(s.doc().unwrap().doc.slides[0].transition.as_ref().is_some_and(|t| t.sound.is_none()));
+    let not_audio = deckcraft_engine::cmd::base64_encode(b"hello, not a sound");
+    assert!(s.execute("transition.sound", &json!({"data": not_audio, "name": "notes.txt"})).is_err());
+}
+
+/// Built-in transition sounds, Loop Until Next Sound and [Stop Previous Sound] are set, saved as
+/// PowerPoint writes them (`p:stSnd loop="1"`, `p:endSnd`) and read back.
+#[test]
+fn transition_sound_options_round_trip() {
+    use deckcraft_engine::Session;
+    use serde_json::json;
+    let mut s = Session::with_new();
+    s.execute("slide.new", &json!({})).unwrap();
+    s.execute("slide.new", &json!({})).unwrap();
+    s.execute("transition.sound", &json!({"builtin": "chime", "loop": true, "index": 0})).unwrap();
+    s.execute("transition.sound", &json!({"builtin": "Chime", "index": 1})).unwrap();
+    s.execute("transition.sound", &json!({"stopPrevious": true, "index": 2})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    assert_eq!(doc.media.len(), 1, "the same built-in sound is embedded once");
+    assert_eq!(doc.media[0].name, "Chime.wav");
+    let bytes = deckcraft_pptx::export(&doc).unwrap();
+    let slide1 = {
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
+        let mut x = String::new();
+        std::io::Read::read_to_string(&mut z.by_name("ppt/slides/slide1.xml").unwrap(), &mut x).unwrap();
+        x
+    };
+    assert!(slide1.contains(r#"<p:stSnd loop="1">"#) && slide1.contains(r#"name="Chime.wav""#), "{slide1}");
+    let back = deckcraft_pptx::import(&bytes).unwrap();
+    let t: Vec<_> = back.slides.iter().map(|s| s.transition.clone().unwrap_or_default()).collect();
+    assert!(t[0].sound.is_some() && t[0].sound_loop && !t[0].stop_sound);
+    assert!(t[1].sound.is_some() && !t[1].sound_loop);
+    assert!(t[2].sound.is_none() && t[2].stop_sound, "{:?}", t[2]);
+    // Turning the loop off alone keeps the sound.
+    s.execute("transition.sound", &json!({"loop": false, "index": 0})).unwrap();
+    let t0 = s.doc().unwrap().doc.slides[0].transition.clone().unwrap();
+    assert!(t0.sound.is_some() && !t0.sound_loop);
+    assert!(s.execute("transition.sound", &json!({"builtin": "foghorn"})).is_err());
+}
+
+/// Replace `from` with `to` in every slide part of an exported deck.
+fn patch_slides(bytes: Vec<u8>, from: &str, to: &str) -> Vec<u8> {
+    use std::io::{Read, Write};
+    let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("zip");
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for i in 0..z.len() {
+        let mut f = z.by_index(i).expect("entry");
+        let name = f.name().to_string();
+        let mut data = vec![];
+        f.read_to_end(&mut data).expect("read");
+        if name.starts_with("ppt/slides/slide") && name.ends_with(".xml") {
+            data = String::from_utf8(data).expect("utf8").replace(from, to).into_bytes();
+        }
+        out.start_file(name, zip::write::SimpleFileOptions::default()).expect("start");
+        out.write_all(&data).expect("write");
+    }
+    out.finish().expect("finish").into_inner()
+}
+
+fn runs_of(p: &Presentation, needle: &str) -> Vec<(RunKind, String)> {
+    for s in &p.slides {
+        for sh in &s.shapes {
+            let Some(t) = &sh.text else { continue };
+            for para in &t.paragraphs {
+                if para.runs.iter().any(|r| r.text.contains(needle)) {
+                    return para.runs.iter().map(|r| (r.kind.clone(), r.text.clone())).collect();
+                }
+            }
+        }
+    }
+    panic!("no paragraph with {needle}");
+}
+
+#[test]
+fn literal_line_ends_in_run_text_read_as_breaks_and_survive_save() {
+    let mut p = defaults::new_presentation(None);
+    let mut s = shape(&mut p, "Code", 10.0, 10.0, 400.0, 100.0);
+    s.text = Some(TextBody::from_text("CRLFHERE"));
+    let first = p.slides[0].id;
+    p.slide_mut(first).expect("slide").shapes.push(s);
+    let bytes = patch_slides(deckcraft_pptx::export(&p).expect("export"), "CRLFHERE", "one\r\n   two\rthree");
+    let a = deckcraft_pptx::import(&bytes).expect("import");
+    let want = vec![
+        (RunKind::Text, "one".to_string()),
+        (RunKind::Break, String::new()),
+        (RunKind::Text, "   two".to_string()),
+        (RunKind::Break, String::new()),
+        (RunKind::Text, "three".to_string()),
+    ];
+    assert_eq!(runs_of(&a, "one"), want);
+    assert_eq!(runs_of(&round(&a), "one"), want, "save and reopen keep the runs");
+}
+
+#[test]
+fn color_pulse_keeps_its_effect_colour_and_duration() {
+    let mut p = defaults::new_presentation(None);
+    let s = shape(&mut p, "Pulsed", 10.0, 10.0, 200.0, 100.0);
+    let id = s.id;
+    let first = p.slides[0].id;
+    let sl = p.slide_mut(first).expect("slide");
+    sl.shapes.push(s);
+    let white = ColorRef::rgb(Rgba::rgb(255, 255, 255));
+    sl.animations.push(Animation {
+        shape: id,
+        class: AnimClass::Emphasis,
+        effect: "colorPulse".into(),
+        duration_ms: 1000,
+        color: Some(white.clone()),
+        ..Default::default()
+    });
+    let q = round(&p);
+    let a = &q.slides[0].animations[0];
+    assert_eq!((a.class, a.effect.as_str()), (AnimClass::Emphasis, "colorPulse"));
+    assert_eq!(a.color, Some(white));
+    assert_eq!(a.amount, None, "no grow/shrink scale is invented");
+    assert_eq!(a.duration_ms, 1000);
 }
