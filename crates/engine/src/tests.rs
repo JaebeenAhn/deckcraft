@@ -182,6 +182,19 @@ fn sample_deck_builds_and_renders() {
 }
 
 #[test]
+fn writable_format_for_path_rejects_formats_deckcraft_does_not_write() {
+    use crate::cmd::file::writable_format_for_path as f;
+    assert_eq!(f("a.deckcraft"), Some("deckcraft"));
+    assert_eq!(f("dir/A.PPTX"), Some("pptx"));
+    assert_eq!(f("a.pdf"), Some("pdf"));
+    assert_eq!(f("a.jpg"), Some("jpeg"));
+    assert_eq!(f("a.txt"), Some("outline"));
+    for path in ["a.odp", "a.gif", "a.svg", "a.outline", "a", "dir.v2/a"] {
+        assert_eq!(f(path), None, "{path}");
+    }
+}
+
+#[test]
 fn save_and_reopen_native() {
     let mut s = Session::new();
     sample::open_sample(&mut s).unwrap();
@@ -834,4 +847,18 @@ fn slide_ranges_parse_like_powerpoints_print_box() {
     assert!(cmd::file::pdf_bytes(&doc, &json!({"slides": "5"})).is_err());
     let opts = cmd::file::pdf_options(&json!({"slides": [0, 7, 1]}), 2).unwrap();
     assert_eq!(opts.slides, Some(vec![0, 1]), "indices past the end are dropped");
+}
+
+#[test]
+fn cell_fill_walks_only_the_cells_a_huge_selection_covers() {
+    // A selection may reach far past the table; filling it touches the real cells and nothing more.
+    let mut s = session();
+    let id = s.execute("insert.table", &json!({"rows": 2, "cols": 2, "rect": [100.0, 100.0, 200.0, 40.0]})).unwrap()["id"].clone();
+    s.execute("table.selectCells", &json!({"id": id, "from": [1, 1], "to": [1_000_000_000u64, 1_000_000_000u64]})).unwrap();
+    s.execute("table.cellFill", &json!({"none": true})).unwrap();
+    let st = s.doc().unwrap();
+    let sh = st.shapes().iter().find(|sh| json!(sh.id) == id).unwrap();
+    let deckcraft_model::ShapeKind::Table(t) = &sh.kind else { panic!("not a table") };
+    let fills: Vec<bool> = [(0, 0), (0, 1), (1, 0), (1, 1)].iter().map(|&(r, c)| t.cell(r, c).is_some_and(|x| x.fill.is_some())).collect();
+    assert_eq!(fills, [false, false, false, true]);
 }

@@ -49,7 +49,7 @@ pub use extent::{Region, TILE, layout_extent, pasteboard_region, slide_extent};
 pub use images::{decode as decode_image, gif_frame};
 pub use morph_path::PathMorph;
 pub use morph_text::TextMorph;
-pub use placed::{Placed, PlacedLink, PlacedText, place_slide};
+pub use placed::{Placed, PlacedLink, PlacedShape, PlacedText, place_slide};
 pub use table::row_heights as table_row_heights;
 pub use transition::{SlideParts, composite_transition, render_transition};
 
@@ -77,6 +77,19 @@ impl Image {
             }
         }
         out
+    }
+    /// One pixel as straight (unpremultiplied) RGBA; `None` outside the image.
+    pub fn straight_at(&self, x: u32, y: u32) -> Option<[u8; 4]> {
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        let i = (y as usize).checked_mul(self.width as usize)?.checked_add(x as usize)?.checked_mul(4)?;
+        let [r, g, b, a] = <[u8; 4]>::try_from(self.pixels.get(i..i.checked_add(4)?)?).ok()?;
+        if a == 0 || a == 255 {
+            return Some([r, g, b, a]);
+        }
+        let unpremultiply = |c: u8| ((c as u32 * 255 + a as u32 / 2) / a as u32).min(255) as u8;
+        Some([unpremultiply(r), unpremultiply(g), unpremultiply(b), a])
     }
     pub fn to_png(&self) -> Vec<u8> {
         let mut px = self.to_straight();

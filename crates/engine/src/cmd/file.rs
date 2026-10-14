@@ -26,6 +26,15 @@ pub fn specs() -> Vec<CommandSpec> {
             info
         ),
         cmd!(query "file.render", "Render Slide", [], None, "{slide?: index, scale?, edit?: bool} → {png: base64, width, height}", has_doc, render),
+        cmd!(
+            query "slide.colorAt",
+            "Color At",
+            [],
+            None,
+            "{slide?: index, x, y (slide units), scale?: px per unit (2)} → {color: \"RRGGBB\", alpha: 0..255, x, y}: the colour drawn at a point of the slide (the Eyedropper)",
+            has_doc,
+            color_at
+        ),
         cmd!(noundo "file.close", "Close", ["File"], Some("Cmd+W"), "{}", has_doc, close),
         cmd!(
             "file.properties",
@@ -182,6 +191,17 @@ pub fn pdf_bytes(doc: &Presentation, p: &Value) -> Result<Vec<u8>> {
     deckcraft_pdf::export(doc, &pdf_options(p, doc.slides.len())?).map_err(|e| EngineError::Other(e.to_string()))
 }
 
+/// The output extensions [`format_for_path`] maps to a writer of that format.
+pub const WRITABLE_EXTENSIONS: &[&str] = &["deckcraft", "pptx", "potx", "ppsx", "pdf", "png", "jpg", "jpeg", "txt", "md"];
+
+/// The format a file named `path` is written in, or `None` when its extension names no format
+/// DeckCraft writes (`.odp`, `.gif`, `.svg`, no extension …): [`format_for_path`] would save
+/// those as native `.deckcraft` bytes under the wrong name.
+pub fn writable_format_for_path(path: &str) -> Option<&'static str> {
+    let ext = std::path::Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
+    WRITABLE_EXTENSIONS.contains(&ext.as_str()).then(|| format_for_path(path))
+}
+
 pub fn format_for_path(path: &str) -> &'static str {
     let l = path.to_ascii_lowercase();
     if l.ends_with(".pptx") || l.ends_with(".potx") || l.ends_with(".ppsx") {
@@ -267,6 +287,29 @@ fn render(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (png, w, h) = render_png(&st.doc, i, f64_or(p, "scale", 1.0), bool_or(p, "edit", false));
     Ok(json!({"png": base64_encode(&png), "width": w, "height": h}))
+}
+
+/// The colour the slide is drawn with at one point: what the Eyedropper takes.
+fn color_at(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let i = usize_param(p, "slide").unwrap_or(st.selection.slide);
+    if i >= st.doc.slides.len() {
+        return Err(bad("slide.colorAt", format!("no slide {i}")));
+    }
+    let coord = |key: &str| {
+        p.get(key)
+            .and_then(Value::as_f64)
+            .filter(|v| v.is_finite())
+            .ok_or_else(|| bad("slide.colorAt", format!("`{key}` (a number, in slide units) is required")))
+    };
+    let (x, y) = (coord("x")?, coord("y")?);
+    let scale = f64_or(p, "scale", 2.0).clamp(0.01, 16.0);
+    let img = deckcraft_render::render_slide(&st.doc, i, &deckcraft_render::RenderOpts { scale, ..Default::default() });
+    let (px, py) = (x * scale, y * scale);
+    let inside = px >= 0.0 && py >= 0.0 && px < f64::from(img.width) && py < f64::from(img.height);
+    let [r, g, b, a] =
+        img.straight_at(px as u32, py as u32).filter(|_| inside).ok_or_else(|| bad("slide.colorAt", "the point is outside the slide"))?;
+    Ok(json!({"color": format!("{r:02X}{g:02X}{b:02X}"), "alpha": a, "x": x, "y": y}))
 }
 
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
@@ -430,3 +473,7 @@ fn recovery_discard(s: &mut Session, p: &Value) -> Result<Value> {
     }
     ok()
 }
+
+#[cfg(test)]
+#[path = "color_at_tests.rs"]
+mod color_at_tests;
