@@ -25,6 +25,7 @@
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Design ▸ Effects; checklist row stays P so breadth stays 79%; previous: 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Slide Master Preserve and Title/Footers placeholders; checklist letters unchanged, breadth stays 79%, dialogs stay 27; previous: 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (chart trendlines are drawn; previous: minor, chart trendlines round-trip; 3-D bevel, camera and face lighting rendered; IME composition and CJK interface text landed, #101; core-workflow alpha gate added; stage stays alpha; full re-measure against PowerPoint for Mac 16.113.4 and the open GitHub issues) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Format Background picture options are pane controls, not a new dialog; dialogs stay 27; previous: 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (animation preview plays on the editor canvas; previous: minor, 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (a two-finger twist rotates the selection; previous: minor, 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (a trackpad swipe turns the page in the editor and the show; pinch-zoom remains; previous: minor, 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
@@ -32,6 +33,7 @@
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Paragraph dialog; previous: minor, Font dialog) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (Grid Options dialog; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (WordArt adjust handles drag; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (pen pressure scales ink width; tilt, pinch and trackpad gestures remain; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 
 Every known shortfall, one entry each, ranked by how much it stops someone who presents with
 PowerPoint from switching. This is the work list: pick from the top. Numbers are summarized in
@@ -198,11 +200,13 @@ Detail in [file-format-parity.md](file-format-parity.md).
 - **Impact:** handouts and speaker notes are printed in many workplaces.
 - **Estimate:** 5–8 h (print through the PDF path and each OS's print dialog). **Beta blocker.**
 
-### No video or animated GIF export
-- **Evidence:** checklist row missing; PowerPoint exports MP4/MOV and animated GIF.
+### No video export; the animated GIF has no transitions or builds
+- **Evidence:** checklist row "Export video (MP4) / animated GIF" is partial: `file.export` writes
+  an animated GIF with one frame per slide (#171), but there is no MP4/MOV export, and the GIF
+  doesn't animate transitions or build animations.
 - **Impact:** sharing a talk as a video is a common request.
-- **Estimate:** 10–16 h (render the timeline frame by frame; an H.264 encoder is the hard part,
-  FilmCraft has one to copy).
+- **Estimate:** 10–16 h (render the timeline frame by frame, which the GIF can then reuse for
+  transitions and builds; an H.264 encoder is the hard part, FilmCraft has one to copy).
 
 ### Embedded MicroType Express font subsets aren't drawn
 - **Evidence:** `p:embeddedFontLst` is read and written. A raw TrueType/OpenType face, or one inside an Embedded OpenType wrapper, is loaded and used to draw. A MicroType Express subset (`application/x-fontdata` with neither form) is kept and written back, and the text still uses a stand-in.
@@ -390,7 +394,9 @@ Detail in [ui-parity.md](ui-parity.md).
 - **Dialogs**: 28 dialogs vs PowerPoint's ~60 (Font, Bullets and Numbering, Find/Replace dialog,
   Action Settings, Print, Insert Object…). 8–14 h.
 - **Dialogs**: 30 dialogs vs PowerPoint's ~60 (Font, Find/Replace dialog, Replace Fonts, Print,
-  Insert Object…). Size and Position, Bullets and Numbering, Action Settings and Date and Time are in. 8–14 h.
+  Insert Object…). Size and Position, Bullets and Numbering, Action Settings and Date and Time are in.
+  Format Background picture options (transparency, tile, offset, scale, alignment, mirror, and Apply
+  to All copying a picture) are pane controls on `design.background`, not another dialog. 8–14 h.
 - **Dialogs**: 28 dialogs vs PowerPoint's ~60. The Font dialog is in (family, size, style, underline,
   colour, strikethrough, baseline, caps, character spacing, one undo step). Still missing: Bullets
   and Numbering, Find/Replace, Replace Fonts, Action Settings, Print, Insert Object…. 6–12 h.
@@ -413,6 +419,7 @@ Detail in [hardware-parity.md](hardware-parity.md).
 - **No pen pressure or tilt for ink**; no pinch-zoom (it does not keep the point under the pointer). A two-finger twist does rotate the selected shapes. 3–6 h.
 - **No pen pressure or tilt for ink**; no pinch-zoom. A trackpad swipe turns the page when the
   slide fits the window, and during the show. 2–4 h for pinch-zoom.
+- **Pen pressure scales ink width** when the pointer reports it (a mouse or a missing reading stays at the pen width; a stroke saved as a flat `0.5` still draws at the pen width). Tilt is not read. No pinch-zoom or other trackpad gestures. 2–4 h.
 
 ## Localization
 
@@ -494,6 +501,7 @@ Detail in [localization-parity.md](localization-parity.md).
 | 2026-10-13 | trivial | Command palette skips commands that need a value, so Export opens the dialog (#79) |
 | 2026-10-14 | minor | Design ▸ Effects applies a named effect scheme. The checklist row stays P, so breadth stays 79%. Dialogs stay 27 |
 | 2026-10-14 | minor | Slide Master Preserve and Title/Footers placeholders. Checklist letters unchanged (breadth stays 79%); dialogs stay 27 |
+| 2026-10-14 | minor | Format Background picture and solid options are in the existing pane. Dialogs stay 27 |
 | 2026-10-13 | minor | AutoCorrect options: case rules, fractions, ellipsis, a larger built-in list and your own entries (`text.autocorrect`, Tools ▸ AutoCorrect) |
 | 2026-10-14 | trivial | Notes spelling menu, Review › Language with Do Not Check Spelling, repeated words |
 | 2026-10-14 | trivial | Spelling squiggles in table cells and notes, and on the web |
@@ -506,11 +514,13 @@ Detail in [localization-parity.md](localization-parity.md).
 | 2026-10-14 | minor | Font dialog sets typeface, size, style, underline, colour, strikethrough, baseline, caps and character spacing in one step |
 | 2026-10-13 | minor | Grid Options dialog sets spacing, snap and whether gridlines and guides show; the on-screen grid follows that spacing |
 | 2026-10-13 | minor | WordArt adjust handles: a selected text warp shows one yellow handle per adjust, and dragging it sets that guide value (gallery and command still open) |
+| 2026-10-14 | minor | Pen pressure scales ink width when the pointer reports it; tilt, pinch-zoom and other trackpad gestures remain |
 | 2026-10-13 | minor | Shape, picture and table rendering checked against PowerPoint on ~150 synthetic edge-case slides; 3-D bevels, cameras and face lighting now render approximately (gap narrowed to extrusion, rigs and the 3-D pane) |
 | 2026-10-13 | minor | Interactive decks: triggers, return-to-slide state and click rules landed in the slide show; the remaining pieces are one new entry under Features |
 | 2026-10-12 | minor | IME composition in slide text and notes, and CJK interface text with real glyphs (#101): the IME gap is now Korean on the web and table-cell underlines |
 | 2026-10-12 | minor | EMF/WMF text, pattern and hatch brushes drawn; legacy OLE and ActiveX previews shown; the SVG gap keeps only EMF clip regions |
 | 2026-10-12 | minor | Text warps render (all 40 presets, adjusts round-trip); the warp gap is now the gallery, command and handles |
+| 2026-10-11 | minor | Animated GIF export landed (#171); the entry now covers video export and animating transitions in the GIF |
 | 2026-10-10 | minor | Narrowed localization gap: Ukrainian UI catalog and language selection exist; other target languages, IME and RTL UI remain |
 | 2026-10-10 | minor | Noted that no gap blocks alpha (core-workflow gate passes) |
 | 2026-10-10 | major | Created: every gap from the 2026-10-10 re-measure and the 16 open GitHub issues, ranked, with beta blockers marked |
