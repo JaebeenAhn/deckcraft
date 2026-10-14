@@ -15,9 +15,26 @@ use crate::{Result, Session, Target};
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!("design.theme", "Themes", ["Design", "Themes"], None, "{name} (see design.themes)", has_doc, theme),
+        cmd!(
+            "design.browseTheme",
+            "Browse for Themes…",
+            ["Design", "Themes"],
+            None,
+            "{path} | {name, data: base64} — apply the theme of a .thmx, .pptx or .potx file",
+            has_doc,
+            browse_theme
+        ),
         cmd!(query "design.themes", "Theme Gallery", [], None, "{} → themes, colour schemes and font schemes", always, themes),
-        cmd!("design.colors", "Colors", ["Design", "Variants"], None, "{name} | {colors: {accent1: #RRGGBB, …}}", has_doc, colors),
-        cmd!("design.fonts", "Fonts", ["Design", "Variants"], None, "{name} | {major, minor}", has_doc, fonts),
+        cmd!(
+            "design.colors",
+            "Colors",
+            ["Design", "Variants"],
+            None,
+            "{} opens Create New Theme Colors | {name} | {colors: {dk1|lt1|dk2|lt2|accent1..6|hlink|folHlink: #RRGGBB}}",
+            has_doc,
+            colors
+        ),
+        cmd!("design.fonts", "Fonts", ["Design", "Variants"], None, "{} opens Create New Theme Fonts | {name} | {major, minor}", has_doc, fonts),
         cmd!(
             "design.background",
             "Format Background",
@@ -79,6 +96,68 @@ fn theme(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"theme": name}))
 }
 
+fn browse_theme(s: &mut Session, p: &Value) -> Result<Value> {
+    let bytes = if let Some(data) = str_param(p, "data") {
+        super::base64_decode(data).ok_or_else(|| bad("design.browseTheme", "invalid base64 `data`"))?
+    } else {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = str_param(p, "path").ok_or_else(|| bad("design.browseTheme", "give `path` or `data`"))?;
+            std::fs::read(path).map_err(|e| crate::EngineError::Other(format!("{path}: {e}")))?
+        }
+        #[cfg(target_arch = "wasm32")]
+        return Err(bad("design.browseTheme", "give `data`"));
+    };
+    if !deckcraft_pptx::sniff(&bytes) {
+        return Err(bad("design.browseTheme", "not a theme or PowerPoint file"));
+    }
+    let (theme, media) = deckcraft_pptx::import_theme(&bytes).map_err(|e| bad("design.browseTheme", e.to_string()))?;
+    let name = theme.name.clone();
+    s.edit(|doc, sel| {
+        // The theme's pictures (format-scheme blip fills) get ids of this deck.
+        let mut map = std::collections::HashMap::new();
+        for m in &media {
+            let id = doc.add_media(&m.name, &m.content_type, m.data.as_ref().clone());
+            map.insert(m.id.0, id.0);
+        }
+        let theme = if map.is_empty() { theme.clone() } else { remap_media_ids(&theme, &map)? };
+        let mi = master_index(doc, sel);
+        let m = Arc::make_mut(doc.masters.get_mut(mi).ok_or_else(|| bad("design.browseTheme", "no master"))?);
+        m.theme = theme;
+        m.color_map = vec![];
+        Ok(())
+    })?;
+    Ok(json!({"theme": name}))
+}
+
+/// `theme` with every `media` id field rewritten through `map` (format-scheme picture fills).
+fn remap_media_ids(theme: &deckcraft_model::theme::Theme, map: &std::collections::HashMap<u32, u32>) -> Result<deckcraft_model::theme::Theme> {
+    fn rec(v: &mut Value, map: &std::collections::HashMap<u32, u32>, depth: usize) {
+        if depth > 64 {
+            return;
+        }
+        match v {
+            Value::Object(o) => {
+                for (k, x) in o.iter_mut() {
+                    if k == "media"
+                        && let Some(n) = x.as_u64().and_then(|n| u32::try_from(n).ok())
+                        && let Some(new) = map.get(&n)
+                    {
+                        *x = json!(new);
+                    } else {
+                        rec(x, map, depth + 1);
+                    }
+                }
+            }
+            Value::Array(a) => a.iter_mut().for_each(|x| rec(x, map, depth + 1)),
+            _ => {}
+        }
+    }
+    let mut v = serde_json::to_value(theme).map_err(|e| bad("design.browseTheme", e.to_string()))?;
+    rec(&mut v, map, 0);
+    serde_json::from_value(v).map_err(|e| bad("design.browseTheme", e.to_string()))
+}
+
 fn master_index(doc: &Presentation, sel: &crate::Selection) -> usize {
     match sel.target {
         Target::Master { master } | Target::Layout { master, .. } => master,
@@ -95,57 +174,208 @@ fn themes(_s: &mut Session, _p: &Value) -> Result<Value> {
 }
 
 fn colors(s: &mut Session, p: &Value) -> Result<Value> {
-    let scheme = if let Some(name) = str_param(p, "name") {
-        Some(
-            builtin_color_schemes()
-                .into_iter()
-                .find(|c| c.name.eq_ignore_ascii_case(name))
-                .ok_or_else(|| bad("design.colors", format!("no colour scheme `{name}`")))?,
-        )
-    } else {
-        None
+    let name_v = p.get("name");
+    let colors_v = p.get("colors");
+    if name_v.is_none() && colors_v.is_none() {
+        let sc = current_colors(s)?;
+        s.ui_requests.push(crate::UiRequest::Dialog { id: "themeColors".into(), params: scheme_dialog_params(&sc) });
+        return ok();
+    }
+    let given = match name_v {
+        None => None,
+        Some(Value::String(n)) => {
+            let n = n.trim();
+            if n.is_empty() {
+                return Err(bad("design.colors", "name is empty"));
+            }
+            Some(n.to_string())
+        }
+        Some(_) => return Err(bad("design.colors", "`name` must be a string")),
     };
-    let custom = p.get("colors").and_then(Value::as_object).cloned();
+    let slots = parse_color_slots(colors_v)?;
+    let current = current_colors(s)?;
+    let next = next_scheme(&current, given.as_deref(), slots.as_deref())?;
+    if next == current {
+        return ok();
+    }
     s.edit(|doc, sel| {
         let mi = master_index(doc, sel);
         let m = Arc::make_mut(doc.masters.get_mut(mi).ok_or_else(|| bad("design.colors", "no master"))?);
-        if let Some(sc) = &scheme {
-            m.theme.colors = sc.clone();
-        }
-        if let Some(c) = &custom {
-            for (k, v) in c {
-                if let (Some(slot), Some(rgb)) = (deckcraft_color::SchemeSlot::from_xml(k), v.as_str().and_then(deckcraft_color::Rgba::from_hex)) {
-                    m.theme.colors.set(slot, rgb);
-                }
-            }
-            m.theme.colors.name = "Custom".into();
-        }
+        m.theme.colors = next;
         Ok(())
     })?;
     ok()
 }
 
-fn fonts(s: &mut Session, p: &Value) -> Result<Value> {
-    let scheme = if let Some(name) = str_param(p, "name") {
-        builtin_font_schemes()
-            .into_iter()
-            .find(|f| f.name.eq_ignore_ascii_case(name))
-            .ok_or_else(|| bad("design.fonts", format!("no font scheme `{name}`")))?
-    } else {
-        let major = str_param(p, "major").ok_or_else(|| bad("design.fonts", "give `name`, or `major` and `minor`"))?;
-        let minor = str_param(p, "minor").unwrap_or(major);
-        deckcraft_model::theme::FontScheme {
-            name: "Custom".into(),
-            major: deckcraft_model::theme::FontSet { latin: major.into(), ..Default::default() },
-            minor: deckcraft_model::theme::FontSet { latin: minor.into(), ..Default::default() },
-        }
+fn current_colors(s: &Session) -> Result<deckcraft_color::ColorScheme> {
+    let st = s.doc()?;
+    let mi = master_index(&st.doc, &st.selection);
+    st.doc.masters.get(mi).map(|m| m.theme.colors.clone()).ok_or_else(|| bad("design.colors", "no master"))
+}
+
+fn scheme_dialog_params(sc: &deckcraft_color::ColorScheme) -> Value {
+    let mut colors = serde_json::Map::new();
+    for slot in deckcraft_color::SchemeSlot::THEME {
+        colors.insert(slot.xml_name().to_string(), Value::String(format!("#{}", sc.get(slot).hex())));
+    }
+    json!({"name": sc.name, "colors": colors})
+}
+
+/// `None` when the key is absent. Present values must be the twelve stored slots; aliases such
+/// as `bg1` are rejected because `ColorScheme::set` ignores them.
+fn parse_color_slots(colors_v: Option<&Value>) -> Result<Option<Vec<(deckcraft_color::SchemeSlot, deckcraft_color::Rgba)>>> {
+    let Some(v) = colors_v else { return Ok(None) };
+    let Some(map) = v.as_object() else {
+        return Err(bad("design.colors", "`colors` must be an object"));
     };
+    if map.is_empty() {
+        return Err(bad("design.colors", "`colors` is empty"));
+    }
+    let mut slots = Vec::with_capacity(map.len());
+    for (k, v) in map {
+        let Some(slot) = deckcraft_color::SchemeSlot::from_xml(k) else {
+            return Err(bad("design.colors", format!("unknown colour `{k}`")));
+        };
+        if !deckcraft_color::SchemeSlot::THEME.contains(&slot) {
+            return Err(bad("design.colors", format!("`{k}` is not a theme colour")));
+        }
+        let Some(rgb) = v.as_str().and_then(deckcraft_color::Rgba::from_hex) else {
+            return Err(bad("design.colors", format!("`{k}` needs a colour like #RRGGBB")));
+        };
+        slots.push((slot, rgb));
+    }
+    Ok(Some(slots))
+}
+
+/// A builtin `name` is applied first, then `colors` overlays those slots. The stored scheme name
+/// is the given name, or `Custom` when only colours are sent. An unknown name without colours is an error.
+fn next_scheme(
+    current: &deckcraft_color::ColorScheme,
+    given: Option<&str>,
+    slots: Option<&[(deckcraft_color::SchemeSlot, deckcraft_color::Rgba)]>,
+) -> Result<deckcraft_color::ColorScheme> {
+    let mut next = current.clone();
+    if let Some(name) = given {
+        if let Some(builtin) = builtin_color_schemes().into_iter().find(|c| c.name.eq_ignore_ascii_case(name)) {
+            next = builtin;
+        } else if slots.is_none() {
+            return Err(bad("design.colors", format!("no colour scheme `{name}`")));
+        }
+        next.name = name.to_string();
+    }
+    if let Some(changes) = slots {
+        for (slot, rgb) in changes {
+            next.set(*slot, *rgb);
+        }
+        if given.is_none() {
+            next.name = "Custom".into();
+        }
+    }
+    Ok(next)
+}
+
+fn fonts(s: &mut Session, p: &Value) -> Result<Value> {
+    let name_v = p.get("name");
+    let major_v = p.get("major");
+    let minor_v = p.get("minor");
+    if name_v.is_none() && major_v.is_none() && minor_v.is_none() {
+        let scheme = current_fonts(s)?;
+        s.ui_requests.push(crate::UiRequest::Dialog { id: "themeFonts".into(), params: font_dialog_params(&scheme) });
+        return ok();
+    }
+    let given = match name_v {
+        None => None,
+        Some(Value::String(n)) => {
+            let n = n.trim();
+            if n.is_empty() {
+                return Err(bad("design.fonts", "name is empty"));
+            }
+            Some(n.to_string())
+        }
+        Some(_) => return Err(bad("design.fonts", "`name` must be a string")),
+    };
+    let major = face_param("major", major_v)?;
+    let minor = face_param("minor", minor_v)?;
+    let current = current_fonts(s)?;
+    let next = next_font_scheme(&current, given.as_deref(), major.as_deref(), minor.as_deref())?;
+    if next == current {
+        return ok();
+    }
     s.edit(|doc, sel| {
         let mi = master_index(doc, sel);
-        Arc::make_mut(doc.masters.get_mut(mi).ok_or_else(|| bad("design.fonts", "no master"))?).theme.fonts = scheme;
+        Arc::make_mut(doc.masters.get_mut(mi).ok_or_else(|| bad("design.fonts", "no master"))?).theme.fonts = next;
         Ok(())
     })?;
     ok()
+}
+
+fn current_fonts(s: &Session) -> Result<deckcraft_model::theme::FontScheme> {
+    let st = s.doc()?;
+    let mi = master_index(&st.doc, &st.selection);
+    st.doc.masters.get(mi).map(|m| m.theme.fonts.clone()).ok_or_else(|| bad("design.fonts", "no master"))
+}
+
+fn font_dialog_params(scheme: &deckcraft_model::theme::FontScheme) -> Value {
+    json!({"name": scheme.name, "major": scheme.major.latin, "minor": scheme.minor.latin})
+}
+
+/// `None` when the key is absent. A present face must be a non-blank string.
+fn face_param(key: &str, v: Option<&Value>) -> Result<Option<String>> {
+    match v {
+        None => Ok(None),
+        Some(Value::String(s)) => {
+            let s = s.trim();
+            if s.is_empty() { Err(bad("design.fonts", format!("`{key}` is empty"))) } else { Ok(Some(s.to_string())) }
+        }
+        Some(_) => Err(bad("design.fonts", format!("`{key}` must be a string"))),
+    }
+}
+
+/// A builtin `name` is applied first, then `major` / `minor` replace only the latin faces (East
+/// Asian, complex-script and per-script slots stay). The stored name is the given string when
+/// faces are overlaid or the name is not a builtin; a name-only builtin keeps its own name.
+/// Faces without a name are a custom scheme: an omitted `minor` copies `major`.
+fn next_font_scheme(
+    current: &deckcraft_model::theme::FontScheme,
+    given: Option<&str>,
+    major: Option<&str>,
+    minor: Option<&str>,
+) -> Result<deckcraft_model::theme::FontScheme> {
+    let mut next = current.clone();
+    if let Some(name) = given {
+        let replaced = if let Some(builtin) = builtin_font_schemes().into_iter().find(|f| f.name.eq_ignore_ascii_case(name)) {
+            next = builtin;
+            true
+        } else {
+            false
+        };
+        if !replaced && major.is_none() && minor.is_none() {
+            return Err(bad("design.fonts", format!("no font scheme `{name}`")));
+        }
+        if major.is_some() || minor.is_some() || !replaced {
+            next.name = name.to_string();
+        }
+    }
+    if given.is_none() {
+        if let Some(face) = major {
+            next.major.latin = face.to_string();
+            if minor.is_none() {
+                next.minor.latin = face.to_string();
+            }
+        }
+        if let Some(face) = minor {
+            next.minor.latin = face.to_string();
+        }
+        next.name = "Custom".into();
+    } else {
+        if let Some(face) = major {
+            next.major.latin = face.to_string();
+        }
+        if let Some(face) = minor {
+            next.minor.latin = face.to_string();
+        }
+    }
+    Ok(next)
 }
 
 fn background(s: &mut Session, p: &Value) -> Result<Value> {
@@ -564,9 +794,220 @@ fn insert_placeholder(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use deckcraft_color::SchemeSlot;
+    use deckcraft_model::theme::{FontScheme, ScriptFont, builtin_color_schemes, builtin_font_schemes};
+    use serde_json::{Value, json};
+
+    use crate::{Session, UiRequest};
+
+    fn scheme(s: &Session) -> deckcraft_color::ColorScheme {
+        s.doc().unwrap().doc.masters[0].theme.colors.clone()
+    }
+
+    fn font_scheme(s: &Session) -> FontScheme {
+        s.doc().unwrap().doc.masters[0].theme.fonts.clone()
+    }
+
+    fn undo_len(s: &Session) -> usize {
+        s.doc().unwrap().history.undo.len()
+    }
+
     #[test]
     fn civil_dates() {
         assert_eq!(super::civil(0), (1970, 1, 1));
         assert_eq!(super::civil(20_734), (2026, 10, 8));
+    }
+
+    #[test]
+    fn colors_dialog_apply_and_reject() {
+        let mut s = Session::with_new();
+        let original = scheme(&s);
+        let n = undo_len(&s);
+        s.execute("design.colors", &json!({})).unwrap();
+        s.execute("design.colors", &Value::Null).unwrap();
+        assert_eq!(scheme(&s), original);
+        assert_eq!(undo_len(&s), n, "opening the dialog does not edit");
+        assert_eq!(s.ui_requests.len(), 2);
+        match &s.ui_requests[0] {
+            UiRequest::Dialog { id, params } => {
+                assert_eq!(id, "themeColors");
+                assert_eq!(params["name"], "DeckCraft");
+                let colors = params["colors"].as_object().unwrap();
+                assert_eq!(colors.len(), 12);
+                assert_eq!(colors["accent1"].as_str().unwrap(), format!("#{}", original.get(SchemeSlot::Accent1).hex()));
+                assert!(colors.contains_key("folHlink"));
+            }
+            other => panic!("expected a dialog, got {other:?}"),
+        }
+
+        s.execute("design.colors", &json!({"name": "Harbor"})).unwrap();
+        let harbor = builtin_color_schemes().into_iter().find(|c| c.name == "Harbor").unwrap();
+        assert_eq!(scheme(&s).name, "Harbor");
+        assert_eq!(scheme(&s).get(SchemeSlot::Accent1), harbor.get(SchemeSlot::Accent1));
+        assert_eq!(undo_len(&s), n + 1);
+        assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Colors");
+        s.execute("design.colors", &json!({"name": "Harbor"})).unwrap();
+        assert_eq!(undo_len(&s), n + 1, "the same scheme is not an undo step");
+
+        let err = s.execute("design.colors", &json!({"name": "Nope"})).unwrap_err().to_string();
+        assert!(err.contains("no colour scheme `Nope`"), "{err}");
+        assert!(s.execute("design.colors", &json!({"name": "  "})).is_err());
+        assert!(s.execute("design.colors", &json!({"name": 1})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": {}})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": "red"})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": {"bg1": "#112233"}})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": {"tx1": "#112233"}})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": {"phClr": "#112233"}})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": {"nope": "#112233"}})).is_err());
+        assert!(s.execute("design.colors", &json!({"colors": {"accent1": "zz"}})).is_err());
+        assert!(s.execute("design.colors", &json!({"name": "Harbor", "colors": {}})).is_err());
+        assert_eq!(scheme(&s).name, "Harbor");
+        assert_eq!(scheme(&s).get(SchemeSlot::Accent1), harbor.get(SchemeSlot::Accent1));
+        assert_eq!(undo_len(&s), n + 1);
+
+        s.execute("design.colors", &json!({"colors": {"accent1": "112233"}})).unwrap();
+        assert_eq!(scheme(&s).name, "Custom");
+        assert_eq!(scheme(&s).get(SchemeSlot::Accent1).hex(), "112233");
+        assert_eq!(scheme(&s).get(SchemeSlot::Accent2), harbor.get(SchemeSlot::Accent2));
+        assert_eq!(undo_len(&s), n + 2);
+
+        let meadow = builtin_color_schemes().into_iter().find(|c| c.name == "Meadow").unwrap();
+        s.execute("design.colors", &json!({"name": "Meadow", "colors": {"lt1": "#010203"}})).unwrap();
+        assert_eq!(scheme(&s).name, "Meadow");
+        assert_eq!(scheme(&s).get(SchemeSlot::Lt1).hex(), "010203");
+        assert_eq!(scheme(&s).get(SchemeSlot::Accent1), meadow.get(SchemeSlot::Accent1));
+        assert_eq!(undo_len(&s), n + 3);
+
+        s.execute("design.colors", &json!({"name": "Talk", "colors": {"dk1": "#ABCDEF"}})).unwrap();
+        assert_eq!(scheme(&s).name, "Talk");
+        assert_eq!(scheme(&s).get(SchemeSlot::Dk1).hex(), "ABCDEF");
+        assert_eq!(scheme(&s).get(SchemeSlot::Lt1).hex(), "010203");
+        assert_eq!(scheme(&s).get(SchemeSlot::Accent1), meadow.get(SchemeSlot::Accent1));
+
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(scheme(&s).name, "Meadow");
+        assert_eq!(scheme(&s).get(SchemeSlot::Dk1), meadow.get(SchemeSlot::Dk1));
+    }
+
+    #[test]
+    fn fonts_dialog_apply_and_reject() {
+        let mut s = Session::with_new();
+        let original = font_scheme(&s);
+        let n = undo_len(&s);
+        s.execute("design.fonts", &json!({})).unwrap();
+        s.execute("design.fonts", &Value::Null).unwrap();
+        s.execute("design.fonts", &json!([1, 2])).unwrap();
+        assert_eq!(font_scheme(&s), original);
+        assert_eq!(undo_len(&s), n, "opening the dialog does not edit");
+        assert_eq!(s.ui_requests.len(), 3);
+        match &s.ui_requests[0] {
+            UiRequest::Dialog { id, params } => {
+                assert_eq!(id, "themeFonts");
+                assert_eq!(params["name"], original.name);
+                assert_eq!(params["major"], original.major.latin);
+                assert_eq!(params["minor"], original.minor.latin);
+            }
+            other => panic!("expected a dialog, got {other:?}"),
+        }
+
+        s.execute("design.fonts", &json!({"name": "classic"})).unwrap();
+        let classic = builtin_font_schemes().into_iter().find(|f| f.name == "Classic").unwrap();
+        assert_eq!(font_scheme(&s), classic, "a builtin name keeps that scheme, including its own name");
+        assert_eq!(undo_len(&s), n + 1);
+        assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Fonts");
+        s.execute("design.fonts", &json!({"name": "Classic"})).unwrap();
+        assert_eq!(undo_len(&s), n + 1, "the same scheme is not an undo step");
+
+        let err = s.execute("design.fonts", &json!({"name": "Nope"})).unwrap_err().to_string();
+        assert!(err.contains("no font scheme `Nope`"), "{err}");
+        assert!(s.execute("design.fonts", &json!({"name": "  "})).is_err());
+        assert!(s.execute("design.fonts", &json!({"name": 1})).is_err());
+        assert!(s.execute("design.fonts", &json!({"major": ""})).is_err());
+        assert!(s.execute("design.fonts", &json!({"major": "  "})).is_err());
+        assert!(s.execute("design.fonts", &json!({"minor": 1})).is_err());
+        assert!(s.execute("design.fonts", &json!({"name": "Classic", "major": ""})).is_err());
+        assert_eq!(font_scheme(&s), classic);
+        assert_eq!(undo_len(&s), n + 1);
+
+        s.edit(|doc, _| {
+            let fonts = &mut std::sync::Arc::make_mut(&mut doc.masters[0]).theme.fonts;
+            fonts.major.ea = "EA Major".into();
+            fonts.minor.cs = "CS Minor".into();
+            fonts.major.scripts.push(ScriptFont { script: "Arab".into(), typeface: "Noto Naskh Arabic".into() });
+            Ok(())
+        })
+        .unwrap();
+        let marked = font_scheme(&s);
+        let n = undo_len(&s);
+
+        s.execute("design.fonts", &json!({"major": " Lato "})).unwrap();
+        let custom = font_scheme(&s);
+        assert_eq!(custom.name, "Custom");
+        assert_eq!(custom.major.latin, "Lato");
+        assert_eq!(custom.minor.latin, "Lato", "an omitted minor copies major");
+        assert_eq!(custom.major.ea, "EA Major");
+        assert_eq!(custom.minor.cs, "CS Minor");
+        assert_eq!(custom.major.scripts, marked.major.scripts);
+        assert_eq!(undo_len(&s), n + 1);
+
+        s.execute("design.fonts", &json!({"minor": "Roboto"})).unwrap();
+        assert_eq!(font_scheme(&s).name, "Custom");
+        assert_eq!(font_scheme(&s).major.latin, "Lato");
+        assert_eq!(font_scheme(&s).minor.latin, "Roboto");
+        assert_eq!(font_scheme(&s).major.ea, "EA Major");
+        assert_eq!(undo_len(&s), n + 2);
+
+        s.execute("design.fonts", &json!({"name": "Classic", "major": "Inter"})).unwrap();
+        assert_eq!(font_scheme(&s).name, "Classic");
+        assert_eq!(font_scheme(&s).major.latin, "Inter");
+        assert_eq!(font_scheme(&s).minor.latin, "Open Sans");
+        assert_eq!(font_scheme(&s).major.ea, "");
+        assert!(font_scheme(&s).major.scripts.is_empty(), "a builtin is applied before the latin overlay");
+        assert_eq!(undo_len(&s), n + 3);
+
+        s.edit(|doc, _| {
+            std::sync::Arc::make_mut(&mut doc.masters[0]).theme.fonts.major.ea = "Kept".into();
+            Ok(())
+        })
+        .unwrap();
+        s.execute("design.fonts", &json!({"name": "Talk", "minor": "Nunito Sans"})).unwrap();
+        assert_eq!(font_scheme(&s).name, "Talk");
+        assert_eq!(font_scheme(&s).major.latin, "Inter");
+        assert_eq!(font_scheme(&s).minor.latin, "Nunito Sans");
+        assert_eq!(font_scheme(&s).major.ea, "Kept");
+        assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Fonts");
+
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(font_scheme(&s).name, "Classic");
+        assert_eq!(font_scheme(&s).major.ea, "Kept");
+        assert_eq!(font_scheme(&s).minor.latin, "Open Sans");
+    }
+}
+
+#[cfg(test)]
+mod browse_theme_tests {
+    use serde_json::json;
+
+    use crate::Session;
+
+    #[test]
+    fn applies_the_theme_of_another_deck_and_undoes() {
+        let mut other = Session::with_new();
+        other.execute("design.fonts", &json!({"major": "Lato", "minor": "Source Sans 3"})).unwrap();
+        other.execute("design.colors", &json!({"colors": {"accent1": "#123456"}})).unwrap();
+        let data = other.execute("file.saveBytes", &json!({"format": "pptx"})).unwrap()["data"].as_str().unwrap().to_string();
+        let mut s = Session::with_new();
+        s.execute("slide.new", &json!({"layout": "titleAndContent", "title": "T", "body": "B"})).unwrap();
+        let before = s.doc().unwrap().doc.masters[0].theme.clone();
+        s.execute("design.browseTheme", &json!({"name": "Brand.pptx", "data": data})).unwrap();
+        let t = &s.doc().unwrap().doc.masters[0].theme;
+        assert_eq!(t.fonts.major.latin, "Lato");
+        assert_eq!(t.fonts.minor.latin, "Source Sans 3");
+        assert_eq!(t.colors.get(deckcraft_color::SchemeSlot::Accent1).hex().to_lowercase(), "123456");
+        assert!(s.doc().unwrap().doc.validate().is_empty());
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.masters[0].theme, before);
+        assert!(s.execute("design.browseTheme", &json!({"data": "AAAA"})).is_err());
+        assert!(s.execute("design.browseTheme", &json!({})).is_err());
     }
 }

@@ -43,6 +43,24 @@ pub fn specs() -> Vec<CommandSpec> {
             has_slide,
             picture
         ),
+        cmd!(
+            "insert.photoAlbum",
+            "Photo Album…",
+            ["Insert", "Images"],
+            None,
+            "{pictures?: [{path?|data: base64, name?, rot?: deg, brightness?: -1..1, contrast?: -1..1} | {text}], layout?: fit|1|2|4|1title|2title|4title, frame?: none|rect|rounded|simple, captions?: bool, grayscale?: bool, theme?: name} — omit pictures to open the dialog",
+            has_doc,
+            photo_album
+        ),
+        cmd!(
+            "insert.photoAlbumEdit",
+            "Edit Photo Album…",
+            ["Insert", "Images"],
+            None,
+            "{album?: id, pictures?: same as insert.photoAlbum, layout?, frame?, captions?, grayscale?, theme?} — omit pictures to reopen the dialog on the current album",
+            has_doc,
+            photo_album_edit
+        ),
         cmd!("insert.table", "Table…", ["Insert", "Tables"], None, "{rows, cols, rect?}", has_slide, table),
         cmd!(
             "insert.chart",
@@ -421,6 +439,722 @@ fn picture(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let id = add_shape(s, shape, true)?;
     Ok(json!({"id": id}))
+}
+
+const ALBUM_MAX_ITEMS: usize = 48;
+const ALBUM_MAX_BYTES: usize = 32 * 1024 * 1024;
+const ALBUM_MAX_TOTAL: usize = 64 * 1024 * 1024;
+const ALBUM_MAX_TEXT: usize = 400;
+
+#[derive(Clone, Copy)]
+struct AlbumLayout {
+    cols: usize,
+    rows: usize,
+    per: usize,
+    title: bool,
+    fit: bool,
+}
+
+#[derive(Clone, Copy)]
+enum AlbumFrame {
+    None,
+    Rect,
+    Rounded,
+    Simple,
+}
+
+struct AlbumPic {
+    name: String,
+    bytes: Vec<u8>,
+    px_w: f64,
+    px_h: f64,
+    rot: f64,
+    brightness: f64,
+    contrast: f64,
+}
+
+struct AlbumOpts {
+    layout_key: String,
+    frame_key: String,
+    layout: AlbumLayout,
+    frame: AlbumFrame,
+    captions: bool,
+    grayscale: bool,
+    theme: Option<String>,
+}
+
+enum AlbumItem {
+    Picture(AlbumPic),
+    Text(String),
+}
+
+enum AlbumSlide {
+    Pictures(Vec<AlbumPic>),
+    Text(String),
+}
+
+/// Insert a photo album after the current slide.
+///
+/// PowerPoint starts a new presentation. These slides go into the open one, so the album is one
+/// undo step. Omitting `pictures` asks the UI to open the dialog and does not edit.
+fn photo_album(s: &mut Session, p: &Value) -> Result<Value> {
+    if p.get("pictures").is_none_or(Value::is_null) {
+        s.ui_requests.push(crate::UiRequest::Dialog { id: "photoAlbum".into(), params: json!({}) });
+        return Ok(json!({"dialog": "photoAlbum"}));
+    }
+    let opts = album_opts(p)?;
+    let items = album_items(p)?;
+    commit_album(s, items, opts, None)
+}
+
+fn photo_album_edit(s: &mut Session, p: &Value) -> Result<Value> {
+    if p.get("pictures").is_none_or(Value::is_null) {
+        let seed = album_seed(s)?;
+        let album = seed.get("album").cloned().unwrap_or(Value::Null);
+        s.ui_requests.push(crate::UiRequest::Dialog { id: "photoAlbum".into(), params: seed });
+        return Ok(json!({"dialog": "photoAlbum", "album": album}));
+    }
+    let opts = album_opts(p)?;
+    let items = album_items(p)?;
+    let (id, ids) = album_target(s, p)?;
+    commit_album(s, items, opts, Some((id, ids)))
+}
+
+fn commit_album(s: &mut Session, items: Vec<AlbumItem>, opts: AlbumOpts, replace: Option<(u32, Vec<u64>)>) -> Result<Value> {
+    let (snapshot, sel) = {
+        let st = s.doc()?;
+        (st.doc.clone(), st.selection.clone())
+    };
+    let result = (|| {
+        let album_id = match replace.as_ref().map(|(id, _)| *id) {
+            Some(id) if id != 0 => id,
+            _ => s.edit(|doc, _| Ok(doc.alloc_id()))?,
+        };
+        let at = if let Some((_, ids)) = &replace {
+            let st = s.doc()?;
+            let indices: Vec<usize> = ids.iter().filter_map(|id| st.doc.slide_index(deckcraft_model::SlideId(*id as u32))).collect();
+            let Some(at) = indices.iter().copied().min() else {
+                return Err(bad("insert.photoAlbumEdit", "that photo album is no longer in this presentation"));
+            };
+            s.execute("slide.delete", &json!({"ids": ids}))?;
+            Some(at)
+        } else {
+            None
+        };
+        let mut opts = opts;
+        if opts.theme.as_deref().unwrap_or("").is_empty() {
+            opts.theme = s.doc().ok().and_then(|st| st.doc.masters.first().map(|m| m.theme.name.clone())).filter(|n| !n.is_empty());
+        }
+        apply_theme_if_needed(s, opts.theme.as_deref())?;
+        insert_album(s, items, &opts, at, album_id)
+    })();
+    if result.is_err()
+        && let Some(st) = s.active_mut()
+    {
+        st.doc = snapshot;
+        st.selection = sel;
+    }
+    result
+}
+
+fn album_norm(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase()
+}
+
+fn album_layout(p: &Value) -> Result<AlbumLayout> {
+    let key = match p.get("layout") {
+        None => return Ok(AlbumLayout { cols: 1, rows: 1, per: 1, title: false, fit: false }),
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => return Err(bad("insert.photoAlbum", "`layout` must be text")),
+    };
+    match album_norm(key).as_str() {
+        "fit" => Ok(AlbumLayout { cols: 1, rows: 1, per: 1, title: false, fit: true }),
+        "1" | "one" => Ok(AlbumLayout { cols: 1, rows: 1, per: 1, title: false, fit: false }),
+        "1title" | "onetitle" => Ok(AlbumLayout { cols: 1, rows: 1, per: 1, title: true, fit: false }),
+        "2" | "two" => Ok(AlbumLayout { cols: 2, rows: 1, per: 2, title: false, fit: false }),
+        "2title" | "twotitle" => Ok(AlbumLayout { cols: 2, rows: 1, per: 2, title: true, fit: false }),
+        "4" | "four" => Ok(AlbumLayout { cols: 2, rows: 2, per: 4, title: false, fit: false }),
+        "4title" | "fourtitle" => Ok(AlbumLayout { cols: 2, rows: 2, per: 4, title: true, fit: false }),
+        _ => Err(bad("insert.photoAlbum", format!("unknown layout `{key}` (use fit, 1, 2, 4, 1title, 2title or 4title)"))),
+    }
+}
+
+fn album_frame(p: &Value) -> Result<AlbumFrame> {
+    let key = match p.get("frame") {
+        None => return Ok(AlbumFrame::None),
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => return Err(bad("insert.photoAlbum", "`frame` must be text")),
+    };
+    match album_norm(key).as_str() {
+        "none" => Ok(AlbumFrame::None),
+        "rect" | "rectangle" => Ok(AlbumFrame::Rect),
+        "rounded" | "round" | "roundedrect" | "roundedrectangle" => Ok(AlbumFrame::Rounded),
+        "simple" | "simpleframe" | "simplewhite" | "white" => Ok(AlbumFrame::Simple),
+        _ => Err(bad("insert.photoAlbum", format!("unknown frame `{key}` (use none, rect, rounded or simple)"))),
+    }
+}
+
+fn album_captions(p: &Value) -> Result<bool> {
+    match p.get("captions") {
+        None => Ok(false),
+        Some(Value::Bool(v)) => Ok(*v),
+        Some(_) => Err(bad("insert.photoAlbum", "`captions` must be true or false")),
+    }
+}
+
+fn album_bool(p: &Value, key: &str) -> Result<bool> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(v)) => Ok(*v),
+        Some(_) => Err(bad("insert.photoAlbum", format!("`{key}` must be true or false"))),
+    }
+}
+
+fn layout_key_of(layout: AlbumLayout) -> String {
+    if layout.fit {
+        return "fit".into();
+    }
+    let n = match layout.per {
+        2 => "2",
+        4 => "4",
+        _ => "1",
+    };
+    if layout.title { format!("{n}title") } else { n.into() }
+}
+
+fn frame_key_of(frame: AlbumFrame) -> &'static str {
+    match frame {
+        AlbumFrame::None => "none",
+        AlbumFrame::Rect => "rect",
+        AlbumFrame::Rounded => "rounded",
+        AlbumFrame::Simple => "simple",
+    }
+}
+
+fn album_opts(p: &Value) -> Result<AlbumOpts> {
+    let layout = album_layout(p)?;
+    let frame = album_frame(p)?;
+    let theme = match p.get("theme") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) if s.trim().is_empty() => None,
+        Some(Value::String(s)) => {
+            let name = s.trim();
+            let found = deckcraft_model::theme::builtin_themes().into_iter().find(|t| t.name.eq_ignore_ascii_case(name));
+            let Some(t) = found else {
+                return Err(bad("insert.photoAlbum", format!("unknown theme `{name}`")));
+            };
+            Some(t.name)
+        }
+        Some(_) => return Err(bad("insert.photoAlbum", "`theme` must be a theme name")),
+    };
+    Ok(AlbumOpts {
+        layout_key: layout_key_of(layout),
+        frame_key: frame_key_of(frame).into(),
+        layout,
+        frame,
+        captions: album_captions(p)?,
+        grayscale: album_bool(p, "grayscale")?,
+        theme,
+    })
+}
+
+/// A finite number, or 0 when the key is absent. A present non-number is an error.
+fn album_finite(item: &Value, key: &str) -> Result<f64> {
+    match item.get(key) {
+        None | Some(Value::Null) => Ok(0.0),
+        Some(v) => v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("insert.photoAlbum", format!("`{key}` must be a number"))),
+    }
+}
+
+fn album_rot(item: &Value) -> Result<f64> {
+    let n = album_finite(item, "rot")?;
+    Ok(((n % 360.0) + 360.0) % 360.0)
+}
+
+fn album_unit(item: &Value, key: &str) -> Result<f64> {
+    let n = album_finite(item, key)?;
+    if !(-1.0..=1.0).contains(&n) {
+        return Err(bad("insert.photoAlbum", format!("`{key}` must be between -1 and 1")));
+    }
+    Ok(n)
+}
+
+fn album_items(p: &Value) -> Result<Vec<AlbumItem>> {
+    let Some(arr) = p.get("pictures").and_then(Value::as_array) else {
+        return Err(bad("insert.photoAlbum", "`pictures` must be a list"));
+    };
+    if arr.is_empty() {
+        return Err(bad("insert.photoAlbum", "add at least one picture or text box"));
+    }
+    if arr.len() > ALBUM_MAX_ITEMS {
+        return Err(bad("insert.photoAlbum", "a photo album holds at most 48 pictures or text boxes"));
+    }
+    let mut items = Vec::with_capacity(arr.len());
+    let mut total = 0usize;
+    for item in arr {
+        let Some(obj) = item.as_object() else {
+            return Err(bad("insert.photoAlbum", "each album item must be a picture or a text box"));
+        };
+        let has_media = obj.contains_key("data") || obj.contains_key("path");
+        if !has_media {
+            let Some(text) = obj.get("text").and_then(Value::as_str) else {
+                return Err(bad("insert.photoAlbum", "each album item needs `path`, `data` or `text`"));
+            };
+            let text = text.trim();
+            if text.is_empty() {
+                return Err(bad("insert.photoAlbum", "a text box needs some text"));
+            }
+            if text.chars().count() > ALBUM_MAX_TEXT {
+                return Err(bad("insert.photoAlbum", "text is longer than 400 characters"));
+            }
+            items.push(AlbumItem::Text(text.to_string()));
+            continue;
+        }
+        let (name, bytes) = media_bytes(item, "insert.photoAlbum")?;
+        if bytes.len() > ALBUM_MAX_BYTES {
+            return Err(bad("insert.photoAlbum", format!("{name} is larger than 32 MB")));
+        }
+        let next = total.saturating_add(bytes.len());
+        if next > ALBUM_MAX_TOTAL {
+            return Err(bad("insert.photoAlbum", "the album is larger than 64 MB"));
+        }
+        total = next;
+        let ct = content_type(&name, &bytes);
+        if !ct.starts_with("image/") {
+            return Err(bad("insert.photoAlbum", format!("{name} is not a picture")));
+        }
+        if ct != "image/svg+xml" && deckcraft_render::decode_image(&bytes).is_none() {
+            return Err(bad("insert.photoAlbum", format!("{name}: the picture can't be read")));
+        }
+        let (px_w, px_h) = image_px(&bytes);
+        items.push(AlbumItem::Picture(AlbumPic {
+            name,
+            bytes,
+            px_w,
+            px_h,
+            rot: album_rot(item)?,
+            brightness: album_unit(item, "brightness")?,
+            contrast: album_unit(item, "contrast")?,
+        }));
+    }
+    Ok(items)
+}
+
+fn image_px(bytes: &[u8]) -> (f64, f64) {
+    image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|r| r.into_dimensions().ok())
+        .map(|(w, h)| (w as f64, h as f64))
+        .filter(|(w, h)| *w > 0.0 && *h > 0.0)
+        .unwrap_or((4.0, 3.0))
+}
+
+fn file_stem(name: &str) -> String {
+    let base = std::path::Path::new(name).file_name().and_then(|n| n.to_str()).unwrap_or(name);
+    let stem = match base.rsplit_once('.') {
+        Some((s, ext)) if !s.is_empty() && !ext.is_empty() => s,
+        _ => base,
+    };
+    if stem.is_empty() { "Picture".to_string() } else { stem.to_string() }
+}
+
+fn album_plan(items: Vec<AlbumItem>, per: usize) -> Vec<AlbumSlide> {
+    let per = per.max(1);
+    let mut out = Vec::new();
+    let mut batch = Vec::new();
+    for item in items {
+        match item {
+            AlbumItem::Text(text) => {
+                if !batch.is_empty() {
+                    out.push(AlbumSlide::Pictures(std::mem::take(&mut batch)));
+                }
+                out.push(AlbumSlide::Text(text));
+            }
+            AlbumItem::Picture(pic) => {
+                batch.push(pic);
+                if batch.len() >= per {
+                    out.push(AlbumSlide::Pictures(std::mem::take(&mut batch)));
+                }
+            }
+        }
+    }
+    if !batch.is_empty() {
+        out.push(AlbumSlide::Pictures(batch));
+    }
+    out
+}
+
+struct Placed {
+    pic: [f64; 4],
+    caption: Option<[f64; 4]>,
+}
+
+fn fit_in(box_w: f64, box_h: f64, px_w: f64, px_h: f64) -> (f64, f64) {
+    let aspect = if px_h > 0.0 { px_w / px_h } else { 4.0 / 3.0 };
+    let box_w = box_w.max(1.0);
+    let box_h = box_h.max(1.0);
+    if !aspect.is_finite() || aspect <= 0.0 {
+        return (box_w, box_h);
+    }
+    if aspect >= box_w / box_h { (box_w, (box_w / aspect).max(1.0)) } else { ((box_h * aspect).max(1.0), box_h) }
+}
+
+fn place_album(width: f64, height: f64, layout: AlbumLayout, n: usize, captions: bool) -> (Option<[f64; 4]>, Vec<Placed>) {
+    let margin = if layout.fit { 18.0 } else { 36.0 };
+    let title_band = if layout.title { 48.0 } else { 0.0 };
+    let gap = 12.0;
+    let cap_h = 22.0;
+    let cap_gap = 4.0;
+    let left = margin;
+    let top = margin + title_band;
+    let grid_w = (width - margin - left).max(1.0);
+    let grid_h = (height - margin - top).max(1.0);
+    let cols = layout.cols.max(1);
+    let rows = layout.rows.max(1);
+    let cell_w = ((grid_w - gap * (cols.saturating_sub(1) as f64)) / cols as f64).max(1.0);
+    let cell_h = ((grid_h - gap * (rows.saturating_sub(1) as f64)) / rows as f64).max(1.0);
+    let pic_h = if captions { (cell_h - cap_h - cap_gap).max(1.0) } else { cell_h };
+    let mut placed = Vec::with_capacity(n);
+    for i in 0..n {
+        let col = i % cols;
+        let row = i / cols;
+        if row >= rows {
+            break;
+        }
+        let cell_x = left + col as f64 * (cell_w + gap);
+        let cell_y = top + row as f64 * (cell_h + gap);
+        placed.push(Placed { pic: [cell_x, cell_y, cell_w, pic_h], caption: None });
+    }
+    let title = if layout.title { Some([margin, 8.0, (width - 2.0 * margin).max(1.0), 32.0]) } else { None };
+    (title, placed)
+}
+
+fn place_pictures(width: f64, height: f64, layout: AlbumLayout, pics: &[AlbumPic], captions: bool) -> (Option<[f64; 4]>, Vec<Placed>) {
+    let (title, slots) = place_album(width, height, layout, pics.len(), captions);
+    let placed = pics
+        .iter()
+        .zip(slots)
+        .map(|(pic, slot)| {
+            let (dw, dh) = fit_in(slot.pic[2], slot.pic[3], pic.px_w, pic.px_h);
+            let x = slot.pic[0] + (slot.pic[2] - dw) / 2.0;
+            let y = slot.pic[1] + (slot.pic[3] - dh) / 2.0;
+            let caption = if captions { Some([x, y + dh + 4.0, dw.max(36.0), 22.0]) } else { None };
+            Placed { pic: [x, y, dw, dh], caption }
+        })
+        .collect();
+    (title, placed)
+}
+
+fn apply_frame(s: &mut Session, frame: AlbumFrame, id: u64) -> Result<()> {
+    let params = match frame {
+        AlbumFrame::None => return Ok(()),
+        AlbumFrame::Rect => json!({"id": id, "color": "#1A1A1A", "width": 1.5}),
+        AlbumFrame::Rounded => json!({"id": id, "color": "#1A1A1A", "width": 2.25, "join": "round"}),
+        AlbumFrame::Simple => json!({"id": id, "color": "#FFFFFF", "width": 6.0}),
+    };
+    s.execute("shape.line", &params)?;
+    Ok(())
+}
+
+struct AlbumMark {
+    id: u32,
+    layout: String,
+    frame: String,
+    captions: bool,
+    grayscale: bool,
+    theme: String,
+}
+
+fn parse_album_mark(raw: &str) -> Option<AlbumMark> {
+    let rest = raw.strip_prefix("deckcraft-album:")?;
+    let (id_str, rest) = rest.split_once(';').unwrap_or((rest, ""));
+    let id = id_str.parse::<u32>().ok().filter(|id| *id != 0)?;
+    let mut mark = AlbumMark { id, layout: String::new(), frame: String::new(), captions: false, grayscale: false, theme: String::new() };
+    if !rest.is_empty() {
+        for part in rest.split(';') {
+            let Some((k, v)) = part.split_once('=') else { continue };
+            match k {
+                "layout" => mark.layout = v.to_string(),
+                "frame" => mark.frame = v.to_string(),
+                "captions" => mark.captions = v == "1",
+                "gray" => mark.grayscale = v == "1",
+                "theme" => mark.theme = v.to_string(),
+                _ => {}
+            }
+        }
+    }
+    Some(mark)
+}
+
+fn album_marker(id: u32, opts: &AlbumOpts) -> String {
+    let theme = opts.theme.as_deref().unwrap_or("");
+    format!(
+        "deckcraft-album:{id};layout={};frame={};captions={};gray={};theme={theme}",
+        opts.layout_key,
+        opts.frame_key,
+        if opts.captions { 1 } else { 0 },
+        if opts.grayscale { 1 } else { 0 },
+    )
+}
+
+fn stamp_album_slide(s: &mut Session, album_id: u32, opts: &AlbumOpts) -> Result<()> {
+    let marker = album_marker(album_id, opts);
+    s.edit(|doc, sel| {
+        let Some(slide) = doc.slides.get_mut(sel.slide) else {
+            return Err(bad("insert.photoAlbum", "no slide to mark"));
+        };
+        let slide = std::sync::Arc::make_mut(slide);
+        if slide.raw_ext.as_deref().is_none_or(|ext| ext.starts_with("deckcraft-album:")) {
+            slide.raw_ext = Some(marker);
+        }
+        slide.name = "Photo Album".into();
+        Ok(())
+    })
+}
+
+fn apply_theme_if_needed(s: &mut Session, theme: Option<&str>) -> Result<()> {
+    let Some(name) = theme.filter(|n| !n.is_empty()) else { return Ok(()) };
+    let current = s.doc()?.doc.masters.first().map(|m| m.theme.name.clone()).unwrap_or_default();
+    if current.eq_ignore_ascii_case(name) {
+        return Ok(());
+    }
+    s.execute("design.theme", &json!({"name": name}))?;
+    Ok(())
+}
+
+fn album_id_param(p: &Value) -> Option<u32> {
+    match p.get("album") {
+        Some(Value::Number(n)) => n.as_u64().and_then(|v| u32::try_from(v).ok()).filter(|v| *v != 0),
+        Some(Value::String(s)) => s.trim().parse::<u32>().ok().filter(|v| *v != 0),
+        _ => None,
+    }
+}
+
+fn slides_with_album(doc: &deckcraft_model::Presentation, id: u32) -> Vec<u64> {
+    doc.slides.iter().filter(|s| s.raw_ext.as_deref().and_then(parse_album_mark).is_some_and(|m| m.id == id)).map(|s| u64::from(s.id.0)).collect()
+}
+
+fn album_name_run(doc: &deckcraft_model::Presentation, index: usize) -> Vec<u64> {
+    if doc.slides.get(index).is_none_or(|s| s.name != "Photo Album") {
+        return Vec::new();
+    }
+    let mut start = index;
+    while start > 0 && doc.slides.get(start - 1).is_some_and(|s| s.name == "Photo Album") {
+        start -= 1;
+    }
+    let mut end = index;
+    while doc.slides.get(end + 1).is_some_and(|s| s.name == "Photo Album") {
+        end += 1;
+    }
+    doc.slides[start..=end].iter().map(|s| u64::from(s.id.0)).collect()
+}
+
+/// The album under the selection, or the one named by `album`. Id 0 is a name-only run (no marker).
+fn album_target(s: &Session, p: &Value) -> Result<(u32, Vec<u64>)> {
+    let st = s.doc()?;
+    if let Some(id) = album_id_param(p) {
+        let ids = slides_with_album(&st.doc, id);
+        if ids.is_empty() {
+            return Err(bad("insert.photoAlbumEdit", "that photo album is no longer in this presentation"));
+        }
+        return Ok((id, ids));
+    }
+    let Some(slide) = st.doc.slides.get(st.selection.slide) else {
+        return Err(bad("insert.photoAlbumEdit", "this slide is not part of a photo album"));
+    };
+    if let Some(mark) = slide.raw_ext.as_deref().and_then(parse_album_mark) {
+        let ids = slides_with_album(&st.doc, mark.id);
+        if ids.is_empty() {
+            return Err(bad("insert.photoAlbumEdit", "this slide is not part of a photo album"));
+        }
+        return Ok((mark.id, ids));
+    }
+    if slide.name == "Photo Album" {
+        let ids = album_name_run(&st.doc, st.selection.slide);
+        if !ids.is_empty() {
+            return Ok((0, ids));
+        }
+    }
+    Err(bad("insert.photoAlbumEdit", "this slide is not part of a photo album"))
+}
+
+fn pic_count(slide: &deckcraft_model::Slide) -> usize {
+    slide.shapes.iter().filter(|sh| matches!(sh.kind, ShapeKind::Picture { .. })).count()
+}
+
+fn infer_album(slides: &[&deckcraft_model::Slide], theme_now: &str) -> (String, String, bool, bool, String) {
+    let max_pics = slides.iter().map(|s| pic_count(s)).max().unwrap_or(1);
+    let per = if max_pics >= 3 {
+        "4"
+    } else if max_pics == 2 {
+        "2"
+    } else {
+        "1"
+    };
+    let title =
+        slides.iter().any(|s| pic_count(s) > 0 && s.shapes.iter().any(|sh| sh.text_box && sh.xfrm.is_some_and(|x| x.y < 36.0 && x.h <= 48.0)));
+    let layout = if title { format!("{per}title") } else { per.into() };
+    let width = slides.iter().find_map(|s| {
+        s.shapes.iter().find_map(|sh| match &sh.kind {
+            ShapeKind::Picture { .. } => sh.line.as_ref().and_then(|l| l.width),
+            _ => None,
+        })
+    });
+    let frame = match width {
+        None => "none",
+        Some(w) if (w - 6.0).abs() < 0.2 => "simple",
+        Some(w) if (w - 2.25).abs() < 0.2 => "rounded",
+        Some(w) if w < 0.2 => "none",
+        Some(_) => "rect",
+    };
+    let captions = slides.iter().any(|s| {
+        let bottoms: Vec<f64> =
+            s.shapes.iter().filter(|sh| matches!(sh.kind, ShapeKind::Picture { .. })).filter_map(|sh| sh.xfrm.map(|x| x.y + x.h)).collect();
+        !bottoms.is_empty() && s.shapes.iter().any(|sh| sh.text_box && sh.xfrm.is_some_and(|x| bottoms.iter().any(|b| x.y + 1.0 >= *b)))
+    });
+    let mut any = false;
+    let mut gray = true;
+    for s in slides {
+        for sh in &s.shapes {
+            if let ShapeKind::Picture { fill } = &sh.kind {
+                any = true;
+                gray &= fill.adjust.grayscale;
+            }
+        }
+    }
+    (layout, frame.into(), captions, any && gray, theme_now.to_string())
+}
+
+fn items_from_slides(doc: &deckcraft_model::Presentation, slides: &[&deckcraft_model::Slide]) -> Vec<Value> {
+    let mut items = Vec::new();
+    for slide in slides {
+        let pics: Vec<&deckcraft_model::Shape> = slide.shapes.iter().filter(|sh| matches!(sh.kind, ShapeKind::Picture { .. })).collect();
+        if pics.is_empty() {
+            let text = slide
+                .shapes
+                .iter()
+                .filter(|sh| sh.text_box)
+                .filter_map(|sh| sh.text.as_ref().map(|t| t.text()))
+                .find(|t| !t.trim().is_empty())
+                .unwrap_or_default();
+            if !text.trim().is_empty() {
+                items.push(json!({"text": text.trim()}));
+            }
+            continue;
+        }
+        for sh in pics {
+            let ShapeKind::Picture { fill } = &sh.kind else { continue };
+            let media = doc.media(fill.media);
+            let name = if !sh.descr.is_empty() {
+                sh.descr.clone()
+            } else {
+                media.map(|m| m.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| "picture".into())
+            };
+            items.push(json!({
+                "name": name,
+                "data": media.map(|m| base64_encode(&m.data)).unwrap_or_default(),
+                "rot": sh.xfrm.map(|x| x.rot).unwrap_or(0.0),
+                "brightness": fill.adjust.brightness,
+                "contrast": fill.adjust.contrast,
+            }));
+        }
+    }
+    items
+}
+
+fn album_seed(s: &Session) -> Result<Value> {
+    let (id, ids) = album_target(s, &Value::Null)?;
+    let st = s.doc()?;
+    let slides: Vec<&deckcraft_model::Slide> =
+        ids.iter().filter_map(|sid| u32::try_from(*sid).ok()).filter_map(|n| st.doc.slide(deckcraft_model::SlideId(n))).collect();
+    let theme_now = st.doc.masters.first().map(|m| m.theme.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| "DeckCraft".into());
+    let inferred = infer_album(&slides, &theme_now);
+    let mark = slides.first().and_then(|sl| sl.raw_ext.as_deref().and_then(parse_album_mark));
+    let (layout, frame, captions, grayscale, theme) = if let Some(mark) = mark {
+        (
+            if mark.layout.is_empty() { inferred.0 } else { mark.layout },
+            if mark.frame.is_empty() { inferred.1 } else { mark.frame },
+            mark.captions,
+            mark.grayscale,
+            if mark.theme.is_empty() { theme_now } else { mark.theme },
+        )
+    } else {
+        inferred
+    };
+    Ok(json!({
+        "album": if id == 0 { Value::Null } else { json!(id) },
+        "layout": layout,
+        "frame": frame,
+        "captions": captions,
+        "grayscale": grayscale,
+        "theme": theme,
+        "items": items_from_slides(&st.doc, &slides),
+    }))
+}
+
+fn insert_album(s: &mut Session, items: Vec<AlbumItem>, opts: &AlbumOpts, at: Option<usize>, album_id: u32) -> Result<Value> {
+    let (width, height, first) = {
+        let st = s.doc()?;
+        let first = at.unwrap_or_else(|| if st.doc.slides.is_empty() { 0 } else { st.selection.slide.saturating_add(1) });
+        (st.doc.slide_size.width, st.doc.slide_size.height, first)
+    };
+    let layout = opts.layout;
+    let frame = opts.frame;
+    let captions = opts.captions;
+    let plan = album_plan(items, layout.per);
+    let mut slides = 0usize;
+    let mut pictures = 0usize;
+    let mut pin = at;
+    for slide in plan {
+        if let Some(index) = pin.take() {
+            s.execute("slide.new", &json!({"layout": "blank", "at": index}))?;
+        } else {
+            s.execute("slide.new", &json!({"layout": "blank"}))?;
+        }
+        stamp_album_slide(s, album_id, opts)?;
+        slides += 1;
+        match slide {
+            AlbumSlide::Text(text) => {
+                let rect = if layout.title {
+                    [36.0, 18.0, (width - 72.0).max(36.0), 48.0]
+                } else {
+                    [36.0, 36.0, (width - 72.0).max(36.0), (height - 72.0).max(36.0)]
+                };
+                s.execute("insert.textBox", &json!({"rect": rect, "text": text}))?;
+            }
+            AlbumSlide::Pictures(pics) => {
+                let stem = pics.first().map(|p| file_stem(&p.name)).unwrap_or_default();
+                let (title, placed) = place_pictures(width, height, layout, &pics, captions);
+                for (pic, cell) in pics.iter().zip(placed) {
+                    let data = base64_encode(&pic.bytes);
+                    let inserted = s.execute("insert.picture", &json!({"name": pic.name, "data": data, "rect": cell.pic}))?;
+                    let Some(id) = inserted.get("id").and_then(Value::as_u64) else {
+                        return Err(bad("insert.photoAlbum", "the picture was not inserted"));
+                    };
+                    apply_frame(s, frame, id)?;
+                    if opts.grayscale || pic.brightness.abs() > 1e-6 || pic.contrast.abs() > 1e-6 {
+                        s.execute(
+                            "picture.adjust",
+                            &json!({"id": id, "grayscale": opts.grayscale, "brightness": pic.brightness, "contrast": pic.contrast}),
+                        )?;
+                    }
+                    if pic.rot > 0.01 {
+                        s.execute("shape.rotate", &json!({"id": id, "deg": pic.rot}))?;
+                    }
+                    pictures += 1;
+                    if let Some(cap) = cell.caption {
+                        s.execute("insert.textBox", &json!({"rect": cap, "text": file_stem(&pic.name)}))?;
+                    }
+                }
+                if let Some(rect) = title {
+                    s.execute("insert.textBox", &json!({"rect": rect, "text": stem}))?;
+                }
+            }
+        }
+    }
+    s.execute("slide.go", &json!({"index": first}))?;
+    Ok(json!({"slides": slides, "first": first, "pictures": pictures, "album": album_id}))
 }
 
 fn table(s: &mut Session, p: &Value) -> Result<Value> {
@@ -849,4 +1583,292 @@ fn smart_art(s: &mut Session, p: &Value) -> Result<Value> {
         let _ = s.execute("shape.rename", &json!({"id": gid, "name": format!("SmartArt ({kind})")}));
     }
     Ok(g)
+}
+
+#[cfg(test)]
+mod tests {
+    use deckcraft_model::ShapeKind;
+    use deckcraft_model::style::LineJoin;
+
+    use super::*;
+
+    /// 8×8 red PNG.
+    fn png() -> Vec<u8> {
+        vec![
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 8, 0, 0, 0, 8, 8, 2, 0, 0, 0, 75, 109, 41, 220, 0, 0, 0, 17, 73,
+            68, 65, 84, 120, 156, 99, 184, 163, 161, 129, 21, 49, 12, 45, 9, 0, 123, 123, 75, 1, 251, 162, 81, 240, 0, 0, 0, 0, 73, 69, 78, 68, 174,
+            66, 96, 130,
+        ]
+    }
+
+    fn pic(name: &str) -> Value {
+        json!({"name": name, "data": base64_encode(&png())})
+    }
+
+    fn n_slides(s: &Session) -> usize {
+        s.active().map(|d| d.doc.slides.len()).unwrap_or(0)
+    }
+
+    fn pictures(s: &Session, index: usize) -> Vec<deckcraft_model::Shape> {
+        s.active()
+            .and_then(|d| d.doc.slides.get(index))
+            .map(|sl| sl.shapes.iter().filter(|sh| matches!(sh.kind, ShapeKind::Picture { .. })).cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn box_text(s: &Session, index: usize) -> Vec<String> {
+        s.active()
+            .and_then(|d| d.doc.slides.get(index))
+            .map(|sl| sl.shapes.iter().filter(|sh| sh.text_box).filter_map(|sh| sh.text.as_ref().map(|t| t.text())).collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn two_pictures_one_per_slide_are_one_undo() {
+        let mut s = Session::with_new();
+        let before = n_slides(&s);
+        let r = s.execute("insert.photoAlbum", &json!({"pictures": [pic("hill.png"), pic("lake.png")], "layout": "1"})).expect("album");
+        assert_eq!(r["slides"], 2);
+        assert_eq!(n_slides(&s), before + 2);
+        assert_eq!(pictures(&s, 1).len(), 1);
+        assert_eq!(pictures(&s, 2).len(), 1);
+        assert_eq!(s.active().unwrap().selection.slide, 1);
+        let undo = &s.active().unwrap().history.undo;
+        assert_eq!(undo.len(), 1);
+        assert_eq!(undo[0].label, "Photo Album…");
+        s.execute("edit.undo", &json!({})).expect("undo");
+        assert_eq!(n_slides(&s), before);
+        assert!(pictures(&s, 1).is_empty());
+    }
+
+    #[test]
+    fn two_up_shares_one_slide() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png"), pic("b.png")], "layout": "2"})).expect("album");
+        assert_eq!(n_slides(&s), 2);
+        assert_eq!(pictures(&s, 1).len(), 2);
+        assert!(box_text(&s, 1).is_empty());
+    }
+
+    #[test]
+    fn captions_and_titles_use_the_file_stem() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("harbor.png")], "layout": "1", "captions": true})).expect("captions");
+        assert_eq!(box_text(&s, 1), ["harbor"]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("harbor.png")], "layout": "1title"})).expect("title");
+        assert_eq!(box_text(&s, 1), ["harbor"]);
+        assert_eq!(pictures(&s, 1).len(), 1);
+        let pic_y = pictures(&s, 1)[0].xfrm.unwrap().y;
+        assert!(pic_y > 40.0, "the picture sits below the title");
+    }
+
+    #[test]
+    fn frames_set_the_picture_line() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "frame": "rect"})).expect("rect");
+        let line = pictures(&s, 1)[0].line.clone().expect("line");
+        assert_eq!(line.width, Some(1.5));
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "frame": "rounded"})).expect("rounded");
+        let line = pictures(&s, 1)[0].line.clone().expect("line");
+        assert_eq!(line.width, Some(2.25));
+        assert_eq!(line.join, Some(LineJoin::Round));
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "frame": "simple"})).expect("simple");
+        assert_eq!(pictures(&s, 1)[0].line.as_ref().and_then(|l| l.width), Some(6.0));
+    }
+
+    #[test]
+    fn a_text_box_breaks_the_picture_row() {
+        let mut s = Session::with_new();
+        let r = s
+            .execute("insert.photoAlbum", &json!({"pictures": [pic("a.png"), {"text": "A day on the water"}, pic("b.png")], "layout": "2"}))
+            .expect("album");
+        assert_eq!(r["slides"], 3);
+        assert_eq!(pictures(&s, 1).len(), 1);
+        assert_eq!(box_text(&s, 2), ["A day on the water"]);
+        assert!(pictures(&s, 2).is_empty());
+        assert_eq!(pictures(&s, 3).len(), 1);
+        assert_eq!(s.active().unwrap().history.undo.len(), 1);
+    }
+
+    #[test]
+    fn no_pictures_opens_the_dialog_without_editing() {
+        let mut s = Session::with_new();
+        let before = n_slides(&s);
+        let r = s.execute("insert.photoAlbum", &json!({})).expect("open");
+        assert_eq!(r["dialog"], "photoAlbum");
+        assert_eq!(n_slides(&s), before);
+        assert!(s.active().unwrap().history.undo.is_empty());
+        assert_eq!(s.ui_requests.len(), 1);
+        match &s.ui_requests[0] {
+            crate::UiRequest::Dialog { id, .. } => assert_eq!(id, "photoAlbum"),
+            other => panic!("dialog request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bad_input_adds_no_slides() {
+        let mut s = Session::with_new();
+        let before = n_slides(&s);
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [], "layout": "1"})).is_err());
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "layout": "grid"})).is_err());
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "frame": "glow"})).is_err());
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "captions": "yes"})).is_err());
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [{"name": "notes.txt", "data": base64_encode(b"hello")}]} )).is_err());
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [{"text": "  "}]})).is_err());
+        let mut many = Vec::new();
+        for i in 0..49 {
+            many.push(json!({"text": format!("box {i}")}));
+        }
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": many})).is_err());
+        assert_eq!(n_slides(&s), before);
+        assert!(s.active().unwrap().history.undo.is_empty());
+    }
+
+    #[test]
+    fn fit_is_larger_than_one_picture_and_four_up_is_one_slide() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "layout": "1"})).unwrap();
+        let one = pictures(&s, 1)[0].xfrm.unwrap().h;
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "layout": "fit"})).unwrap();
+        let fitted = pictures(&s, 1)[0].xfrm.unwrap().h;
+        assert!(fitted > one, "fit {fitted} should be taller than one-up {one}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png"), pic("b.png"), pic("c.png"), pic("d.png")], "layout": "4"})).unwrap();
+        assert_eq!(n_slides(&s), 2);
+        assert_eq!(pictures(&s, 1).len(), 4);
+    }
+
+    fn adjust(s: &Session, index: usize) -> deckcraft_model::style::PictureAdjust {
+        match &pictures(s, index)[0].kind {
+            ShapeKind::Picture { fill } => fill.adjust.clone(),
+            _ => panic!("picture"),
+        }
+    }
+
+    fn theme_name(s: &Session) -> String {
+        s.active().and_then(|d| d.doc.masters.first()).map(|m| m.theme.name.clone()).unwrap_or_default()
+    }
+
+    #[test]
+    fn edit_without_pictures_reopens_the_dialog() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("hill.png"), pic("lake.png")], "layout": "1"})).unwrap();
+        s.ui_requests.clear();
+        let before = n_slides(&s);
+        let undos = s.active().unwrap().history.undo.len();
+        let r = s.execute("insert.photoAlbumEdit", &json!({})).expect("reopen");
+        assert_eq!(r["dialog"], "photoAlbum");
+        assert_eq!(n_slides(&s), before);
+        assert_eq!(s.active().unwrap().history.undo.len(), undos);
+        let params = match &s.ui_requests[0] {
+            crate::UiRequest::Dialog { id, params } => {
+                assert_eq!(id, "photoAlbum");
+                params
+            }
+            other => panic!("dialog request, got {other:?}"),
+        };
+        assert_eq!(params["items"][0]["name"], "hill.png");
+        assert_eq!(params["items"][1]["name"], "lake.png");
+        assert_eq!(params["layout"], "1");
+        assert!(params["album"].as_u64().unwrap_or(0) > 0);
+    }
+
+    #[test]
+    fn edit_reflows_the_album_in_one_undo() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("hill.png"), pic("lake.png")], "layout": "1"})).unwrap();
+        assert_eq!(n_slides(&s), 3);
+        let r = s.execute("insert.photoAlbumEdit", &json!({"pictures": [pic("hill.png"), pic("lake.png")], "layout": "2"})).expect("reflow");
+        assert_eq!(r["slides"], 1);
+        assert_eq!(n_slides(&s), 2);
+        assert_eq!(pictures(&s, 1).len(), 2);
+        let undo = &s.active().unwrap().history.undo;
+        assert_eq!(undo.last().map(|u| u.label.as_str()), Some("Edit Photo Album…"));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(n_slides(&s), 3);
+        assert_eq!(pictures(&s, 1).len(), 1);
+        assert_eq!(pictures(&s, 2).len(), 1);
+    }
+
+    #[test]
+    fn picture_options_and_theme_are_one_step() {
+        let mut s = Session::with_new();
+        s.execute(
+            "insert.photoAlbum",
+            &json!({"pictures": [{"name": "hill.png", "data": base64_encode(&png()), "rot": 90, "brightness": 0.2, "contrast": -0.1}], "grayscale": true, "theme": "Harbor"}),
+        )
+        .unwrap();
+        let adj = adjust(&s, 1);
+        assert!(adj.grayscale);
+        assert!((adj.brightness - 0.2).abs() < 1e-6);
+        assert!((adj.contrast + 0.1).abs() < 1e-6);
+        assert!((pictures(&s, 1)[0].xfrm.unwrap().rot - 90.0).abs() < 0.01);
+        assert_eq!(theme_name(&s), "Harbor");
+        let mark = s.active().unwrap().doc.slides[1].raw_ext.clone().unwrap_or_default();
+        assert!(mark.contains("gray=1"), "{mark}");
+        assert!(mark.contains("theme=Harbor"), "{mark}");
+        assert_eq!(s.active().unwrap().doc.slides[1].name, "Photo Album");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(theme_name(&s), "DeckCraft");
+        assert_eq!(n_slides(&s), 1);
+    }
+
+    #[test]
+    fn unknown_theme_and_a_plain_slide_change_nothing() {
+        let mut s = Session::with_new();
+        let before = n_slides(&s);
+        let err = s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")], "theme": "NotATheme"})).unwrap_err();
+        assert!(err.to_string().contains("unknown theme"), "{err}");
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png"), {"brightness": "high"}]})).is_err());
+        assert!(s.execute("insert.photoAlbum", &json!({"pictures": [{"name": "a.png", "data": base64_encode(&png()), "brightness": 2}]})).is_err());
+        let err = s.execute("insert.photoAlbumEdit", &json!({})).unwrap_err();
+        assert!(err.to_string().contains("not part of a photo album"), "{err}");
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png")]})).unwrap();
+        s.execute("slide.go", &json!({"index": 0})).unwrap();
+        assert!(s.execute("insert.photoAlbumEdit", &json!({"pictures": [pic("b.png")], "layout": "2"})).is_err());
+        assert_eq!(n_slides(&s), before + 1);
+        assert_eq!(pictures(&s, 1).len(), 1);
+        assert_eq!(theme_name(&s), "DeckCraft");
+    }
+
+    #[test]
+    fn two_albums_stay_independent() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png"), pic("b.png")], "layout": "1"})).unwrap();
+        let last = n_slides(&s) - 1;
+        s.execute("slide.go", &json!({"index": last})).unwrap();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("c.png"), pic("d.png")], "layout": "1"})).unwrap();
+        assert_eq!(n_slides(&s), 5);
+        s.execute("insert.photoAlbumEdit", &json!({"pictures": [pic("c.png"), pic("d.png")], "layout": "2"})).unwrap();
+        assert_eq!(n_slides(&s), 4);
+        assert_eq!(pictures(&s, 1).len(), 1);
+        assert_eq!(pictures(&s, 2).len(), 1);
+        assert_eq!(pictures(&s, 3).len(), 2);
+        let first = s.active().unwrap().doc.slides[1].raw_ext.clone().unwrap_or_default();
+        let second = s.active().unwrap().doc.slides[3].raw_ext.clone().unwrap_or_default();
+        assert!(first.starts_with("deckcraft-album:"));
+        assert!(second.starts_with("deckcraft-album:"));
+        assert_ne!(first.split(';').next(), second.split(';').next());
+    }
+
+    #[test]
+    fn a_named_run_without_a_marker_still_reflows() {
+        let mut s = Session::with_new();
+        s.execute("insert.photoAlbum", &json!({"pictures": [pic("a.png"), pic("b.png")], "layout": "1"})).unwrap();
+        {
+            let doc = std::sync::Arc::make_mut(&mut s.active_mut().unwrap().doc);
+            for sl in doc.slides.iter_mut().skip(1) {
+                std::sync::Arc::make_mut(sl).raw_ext = None;
+            }
+        }
+        s.execute("insert.photoAlbumEdit", &json!({"pictures": [pic("a.png"), pic("b.png")], "layout": "2"})).unwrap();
+        assert_eq!(n_slides(&s), 2);
+        assert_eq!(pictures(&s, 1).len(), 2);
+        let mark = s.active().unwrap().doc.slides[1].raw_ext.clone().unwrap_or_default();
+        assert!(mark.starts_with("deckcraft-album:"), "{mark}");
+    }
 }

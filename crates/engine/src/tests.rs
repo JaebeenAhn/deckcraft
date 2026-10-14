@@ -875,6 +875,41 @@ fn ime_composition_underlines_follow_the_text() {
     assert!(cmd::text::composition_underlines(s.doc().unwrap()).is_empty());
 }
 
+/// #101: a composition in a table cell is underlined inside that cell, the same way slide text is.
+#[test]
+fn ime_composition_in_a_table_cell_is_underlined() {
+    let mut s = session();
+    let id = s.execute("insert.table", &json!({"rows": 2, "cols": 2, "rect": [80.0, 90.0, 400.0, 120.0]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.edit", &json!({"id": id, "cell": [0, 0]})).unwrap();
+    assert!(cmd::text::composition_underlines(s.doc().unwrap()).is_empty());
+    let ts = s.doc().unwrap().selection.text.clone().unwrap();
+    assert!(cmd::text::caret_line(s.doc().unwrap(), &ts).is_some(), "the caret is in the cell");
+    s.compose_text("にほんご", Some((2, 4))).unwrap();
+    let u = cmd::text::composition_underlines(s.doc().unwrap());
+    let thin: Vec<_> = u.iter().filter(|x| !x.2).collect();
+    let thick: Vec<_> = u.iter().filter(|x| x.2).collect();
+    assert_eq!((thin.len(), thick.len()), (1, 1), "{u:?}");
+    let sh = s.doc().unwrap().shape(deckcraft_model::ShapeId(id as u32)).unwrap().clone();
+    let x = cmd::xfrm_of(&s.doc().unwrap().doc, &s.doc().unwrap().selection, &sh);
+    let deckcraft_model::ShapeKind::Table(tb) = &sh.kind else { panic!("not a table") };
+    let col = tb.cols[0];
+    let row = cmd::table_drawn_heights(&s.doc().unwrap().doc, &s.doc().unwrap().selection, tb)[0];
+    for (a, b, _) in &u {
+        assert!(b.x > a.x && (a.y - b.y).abs() < 1e-6, "a horizontal line: {a:?} {b:?}");
+        assert!(a.x >= x.x - 1.0 && b.x <= x.x + col + 1.0, "inside the first column");
+        assert!(a.y > x.y && a.y < x.y + row + 1.0, "inside the first row");
+    }
+    assert!(thick[0].0.x > thin[0].0.x && (thick[0].1.x - thin[0].1.x).abs() < 1e-6, "the converted part is the end");
+    let ts = s.doc().unwrap().selection.text.clone().unwrap();
+    let (top, bot) = cmd::text::caret_line(s.doc().unwrap(), &ts).unwrap();
+    assert!(top.x >= x.x && top.x <= x.x + col && top.y >= x.y && bot.y <= x.y + row + 1.0, "caret in the cell");
+    s.commit_text("日本語").unwrap();
+    assert!(cmd::text::composition_underlines(s.doc().unwrap()).is_empty());
+    let sh = s.doc().unwrap().shape(deckcraft_model::ShapeId(id as u32)).unwrap().clone();
+    let deckcraft_model::ShapeKind::Table(tb) = &sh.kind else { panic!("not a table") };
+    assert_eq!(tb.cell(0, 0).map(|c| c.text.text()), Some("日本語".into()));
+}
+
 /// File › Info (#76): the active presentation's name, location, counts and properties.
 #[test]
 fn file_info_reports_the_presentation() {
@@ -1678,4 +1713,203 @@ fn undo_history_is_capped_by_memory_as_well_as_steps() {
         s.execute("slide.new", &json!({})).unwrap();
     }
     assert_eq!(s.doc().unwrap().history.undo.len(), 120);
+}
+
+#[test]
+fn picture_styles_replace_each_other_in_one_step() {
+    const PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+        0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf,
+        0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60,
+        0x82,
+    ];
+    let mut s = session();
+    let data = cmd::base64_encode(PNG);
+    let id = s.execute("insert.picture", &json!({"data": data, "name": "a.png", "rect": [100.0, 100.0, 200.0, 150.0]})).unwrap()["id"].clone();
+    let pic = |s: &Session| s.doc().unwrap().shapes().iter().find(|sh| json!(sh.id) == id).unwrap().clone();
+    assert_eq!(s.execute("picture.styles", &json!({})).unwrap().as_array().unwrap().len(), 24);
+
+    s.execute("picture.style", &json!({"ids": [id], "style": "reflectedRoundedRectangle"})).unwrap();
+    let p = pic(&s);
+    assert_eq!(p.geom.preset_name(), Some("roundRect"));
+    assert!(p.effects.as_ref().unwrap().reflection.is_some());
+
+    // The next style replaces the whole look: no leftover reflection.
+    s.execute("picture.style", &json!({"ids": [id], "style": "simpleFrameWhite"})).unwrap();
+    let p = pic(&s);
+    assert_eq!(p.geom.preset_name(), Some("rect"));
+    let e = p.effects.as_ref().unwrap();
+    assert!(e.reflection.is_none() && e.outer_shadow.is_some());
+    assert_eq!(p.line.as_ref().and_then(|l| l.width), Some(7.0));
+
+    s.execute("picture.style", &json!({"ids": [id], "style": "softEdgeOval"})).unwrap();
+    let p = pic(&s);
+    assert_eq!(p.geom.preset_name(), Some("ellipse"));
+    assert_eq!(p.effects.as_ref().unwrap().soft_edge, Some(12.0));
+    assert!(p.line.as_ref().is_some_and(|l| l.fill == Some(deckcraft_model::Fill::None)));
+
+    // Survives PPTX.
+    let doc = s.doc().unwrap().doc.as_ref().clone();
+    let back = deckcraft_pptx::import(&deckcraft_pptx::export(&doc).unwrap()).unwrap();
+    let bp = back.slides.iter().flat_map(|sl| &sl.shapes).find(|sh| matches!(sh.kind, deckcraft_model::ShapeKind::Picture { .. })).unwrap();
+    assert_eq!(bp.geom.preset_name(), Some("ellipse"));
+    assert_eq!(bp.effects.as_ref().and_then(|e| e.soft_edge), Some(12.0));
+
+    // One undo step per style; none clears; unknown is refused.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pic(&s).geom.preset_name(), Some("rect"));
+    s.execute("picture.style", &json!({"ids": [id], "style": "none"})).unwrap();
+    assert!(pic(&s).effects.is_none() && pic(&s).line.is_none());
+    assert!(s.execute("picture.style", &json!({"ids": [id], "style": "sparkly"})).is_err());
+}
+
+#[test]
+fn picture_recolor_and_transparent_color() {
+    const PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+        0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf,
+        0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60,
+        0x82,
+    ];
+    let mut s = session();
+    let id = s.execute("insert.picture", &json!({"data": cmd::base64_encode(PNG), "name": "a.png"})).unwrap()["id"].clone();
+    let adj = |s: &Session| match &s.doc().unwrap().shapes().iter().find(|sh| json!(sh.id) == id).unwrap().kind {
+        deckcraft_model::ShapeKind::Picture { fill } => fill.adjust.clone(),
+        _ => panic!("not a picture"),
+    };
+    assert_eq!(s.execute("picture.recolors", &json!({})).unwrap().as_array().unwrap().len(), 21);
+    s.execute("picture.recolor", &json!({"ids": [id], "preset": "bw50"})).unwrap();
+    assert_eq!(adj(&s).bilevel, Some(0.5));
+    // A new preset replaces the old one.
+    s.execute("picture.recolor", &json!({"ids": [id], "preset": "accent2Light"})).unwrap();
+    let a = adj(&s);
+    assert!(a.bilevel.is_none());
+    assert!(matches!(&a.duotone, Some((d, _)) if *d == deckcraft_model::ColorRef::scheme(deckcraft_color::SchemeSlot::Accent2)));
+    s.execute("picture.recolor", &json!({"ids": [id], "preset": "washout"})).unwrap();
+    let a = adj(&s);
+    assert!(a.duotone.is_none() && a.brightness == 0.7 && a.contrast == -0.7);
+    s.execute("picture.recolor", &json!({"ids": [id], "preset": "grayscale"})).unwrap();
+    let a = adj(&s);
+    assert!(a.grayscale && a.brightness == 0.0, "washout undone by the next preset");
+    assert!(s.execute("picture.recolor", &json!({"ids": [id], "preset": "plaid"})).is_err());
+
+    s.execute("picture.transparentColor", &json!({"ids": [id], "color": "#FFFFFF"})).unwrap();
+    assert_eq!(adj(&s).clear_color, Some(deckcraft_color::Rgba::rgb(255, 255, 255)));
+    // Both survive PPTX.
+    let doc = s.doc().unwrap().doc.as_ref().clone();
+    let back = deckcraft_pptx::import(&deckcraft_pptx::export(&doc).unwrap()).unwrap();
+    let ba = back.slides.iter().flat_map(|sl| &sl.shapes).find_map(|sh| match &sh.kind {
+        deckcraft_model::ShapeKind::Picture { fill } => Some(fill.adjust.clone()),
+        _ => None,
+    });
+    let ba = ba.unwrap();
+    assert!(ba.grayscale);
+    assert_eq!(ba.clear_color, Some(deckcraft_color::Rgba::rgb(255, 255, 255)));
+    s.execute("picture.transparentColor", &json!({"ids": [id], "none": true})).unwrap();
+    assert!(adj(&s).clear_color.is_none());
+    s.execute("picture.recolor", &json!({"ids": [id], "preset": "none"})).unwrap();
+    assert_eq!(adj(&s), deckcraft_model::style::PictureAdjust::default());
+}
+
+#[test]
+fn select_all_slides_scope() {
+    let mut s = session();
+    // One slide: selects it, no panic.
+    let r = s.execute("edit.selectAll", &json!({"scope": "slides"})).unwrap();
+    assert_eq!(r["selected"].as_array().map(Vec::len), Some(1));
+    for _ in 0..3 {
+        s.execute("slide.new", &json!({})).unwrap();
+    }
+    s.execute("slide.hide", &json!({"index": 1})).unwrap();
+    s.execute("slide.go", &json!({"index": 1})).unwrap();
+    let before = s.doc().unwrap().selection.slide;
+    s.execute("edit.selectAll", &json!({"scope": "slides"})).unwrap();
+    let st = s.doc().unwrap();
+    let all: Vec<_> = st.doc.slides.iter().map(|x| x.id).collect();
+    assert_eq!(st.selection.slides, all);
+    assert_eq!(st.selection.slide, before, "the current slide must not jump");
+    assert!(st.selection.shapes.is_empty() && st.selection.text.is_none());
+    assert_eq!(st.doc.slides.len(), 4);
+}
+
+#[test]
+fn select_all_slides_leaves_shape_select_all_alone() {
+    let mut s = session();
+    s.execute("shape.insert", &json!({"preset": "rect", "rect": [10, 10, 50, 50]})).unwrap();
+    s.execute("slide.new", &json!({})).unwrap();
+    s.execute("slide.go", &json!({"index": 0})).unwrap();
+    // No scope: still selects shapes on the current slide.
+    s.execute("edit.selectAll", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().selection.shapes.is_empty());
+    assert!(s.doc().unwrap().selection.slides.len() <= 1);
+}
+
+#[test]
+fn select_all_slides_bad_scope_is_an_error() {
+    let mut s = session();
+    assert!(s.execute("edit.selectAll", &json!({"scope": "everything"})).is_err());
+    assert!(s.execute("edit.selectAll", &json!({"scope": 3})).is_err());
+}
+
+#[test]
+fn table_borders_margins_and_cell_alignment() {
+    let mut s = session();
+    let id = s.execute("insert.table", &json!({"rows": 3, "cols": 3, "rect": [100.0, 100.0, 300.0, 120.0]})).unwrap()["id"].clone();
+    let table = |s: &Session| {
+        let st = s.doc().unwrap();
+        let sh = st.shapes().iter().find(|sh| json!(sh.id) == id).unwrap().clone();
+        let deckcraft_model::ShapeKind::Table(t) = sh.kind else { panic!("not a table") };
+        t
+    };
+    // Outside borders round the top-left 2×2 block; neighbours get the facing side too.
+    let block = json!([[0, 0], [0, 1], [1, 0], [1, 1]]);
+    s.execute("table.borders", &json!({"id": id, "which": "outside", "cells": block, "color": "#FF0000", "width": 2.0, "dash": "dash"})).unwrap();
+    let t = table(&s);
+    let w = |r: usize, c: usize, side: usize| t.rows[r].cells[c].borders[side].as_ref().and_then(|l| l.width);
+    assert_eq!(w(0, 0, 0), Some(2.0));
+    assert_eq!(w(0, 0, 2), Some(2.0));
+    assert_eq!(w(0, 0, 1), None, "inside edge untouched");
+    assert_eq!(w(1, 1, 1), Some(2.0));
+    assert_eq!(w(1, 2, 0), Some(2.0), "neighbour's facing side");
+    assert_eq!(w(2, 1, 2), Some(2.0), "neighbour below");
+    assert!(matches!(&t.rows[0].cells[0].borders[0].as_ref().unwrap().dash, Some(deckcraft_model::style::Dash::Preset { name }) if name == "dash"));
+    // Inside horizontal only for the block.
+    s.execute("table.borders", &json!({"id": id, "which": "insideH", "cells": block})).unwrap();
+    let t = table(&s);
+    assert!(t.rows[0].cells[0].borders[3].is_some() && t.rows[1].cells[0].borders[2].is_some());
+    assert!(t.rows[0].cells[0].borders[1].is_none());
+    // Diagonal and none.
+    s.execute("table.borders", &json!({"id": id, "which": "diagDown", "cells": [[2, 2]]})).unwrap();
+    assert!(table(&s).rows[2].cells[2].diag_down.is_some());
+    s.execute("table.borders", &json!({"id": id, "which": "none"})).unwrap();
+    let t = table(&s);
+    assert!(
+        t.rows
+            .iter()
+            .flat_map(|r| &r.cells)
+            .all(|c| c.diag_down.is_none() && c.borders.iter().all(|b| b.as_ref().is_some_and(|l| l.fill == Some(deckcraft_model::Fill::None))))
+    );
+    assert!(s.execute("table.borders", &json!({"id": id, "which": "sideways"})).is_err());
+    // Margins and vertical alignment.
+    s.execute("table.cellMargins", &json!({"id": id, "preset": "wide", "cells": [[0, 0]]})).unwrap();
+    s.execute("table.cellMargins", &json!({"id": id, "preset": "none", "left": 5.0, "cells": [[0, 1]]})).unwrap();
+    s.execute("table.cellAlign", &json!({"id": id, "anchor": "middle"})).unwrap();
+    let t = table(&s);
+    assert_eq!(t.rows[0].cells[0].margins, Some([14.4; 4]));
+    assert_eq!(t.rows[0].cells[1].margins, Some([5.0, 0.0, 0.0, 0.0]));
+    assert!(t.rows.iter().flat_map(|r| &r.cells).all(|c| c.anchor == Some(deckcraft_model::text::Anchor::Middle)));
+    // Survives PPTX.
+    let p = s.doc().unwrap().doc.as_ref().clone();
+    let back = deckcraft_pptx::import(&deckcraft_pptx::export(&p).unwrap()).unwrap();
+    let bt = back
+        .slides
+        .iter()
+        .flat_map(|sl| &sl.shapes)
+        .find_map(|sh| if let deckcraft_model::ShapeKind::Table(t) = &sh.kind { Some(t.clone()) } else { None })
+        .unwrap();
+    assert_eq!(bt.rows[0].cells[0].margins, Some([14.4; 4]));
+    assert_eq!(bt.rows[1].cells[1].anchor, Some(deckcraft_model::text::Anchor::Middle));
+    // One undo step each.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(table(&s).rows[0].cells[0].anchor.is_none());
 }

@@ -63,6 +63,7 @@ After:	Після:
 Airplane	Літак
 Align	Вирівняти
 Align Bottom	Вирівняти за нижнім краєм
+Align Cell Text	Вирівняти текст у клітинці
 Align Center	Вирівняти по центру
 Align Left	Вирівняти за лівим краєм
 Align Middle	Вирівняти посередині
@@ -1252,8 +1253,13 @@ Arrow: Curved Right	Стрілка: Вигнута праворуч
 Arrow: Curved Up	Стрілка: Вигнута вгору
 Arrow: Swoosh	Стрілка: Дугова
 Bean	Квасоля
+Black and White: 25%	Чорно-білий: 25%
+Black and White: 50%	Чорно-білий: 50%
+Black and White: 75%	Чорно-білий: 75%
+Borders	Межі
 Bounce Left	Відскок ліворуч
 Bounce Right	Відскок праворуч
+Browse for Themes…	Огляд тем…
 Callout: Bent Line	Виноска: Ламана лінія
 Callout: Bent Line with Accent Bar	Виноска: Ламана лінія зі смугою акценту
 Callout: Bent Line with Border and Accent Bar	Виноска: Ламана лінія з рамкою і смугою акценту
@@ -1268,6 +1274,7 @@ Callout: Line with Border and Accent Bar	Виноска: Лінія з рамк�
 Callout: Line with No Border	Виноска: Лінія без рамки
 Callout: Quad Arrow	Виноска: Стрілка в чотири боки
 Callout: Up-Down Arrow	Виноска: Стрілка вгору-вниз
+Cell Margins	Поля клітинки
 Chart Marker: Cross Lines	Маркер діаграми: Перехресні лінії
 Chart Marker: Plus Lines	Маркер діаграми: Плюс із ліній
 Chart Marker: Star Lines	Маркер діаграми: Зірка з ліній
@@ -1302,7 +1309,9 @@ Diamonds From Right	Ромби справа
 Diamonds From Top	Ромби згори
 Double Left	Подвійно ліворуч
 Double Right	Подвійно праворуч
+Edit Photo Album…	Змінити фотоальбом…
 Edit Points	Змінити точки
+Fonts in Presentation	Шрифти в презентації
 Football	Овальний м'яч
 From Bottom-Left	Із нижнього лівого кута
 From Bottom-Right	Із нижнього правого кута
@@ -1322,22 +1331,33 @@ Loop de Loop	Петля в петлі
 Move Handle	Перемістити маркер
 Move Point	Перемістити точку
 Neutron	Нейтрон
+New Window	Нове вікно
 Next Comment	Наступний коментар
 No comments.	Немає коментарів.
 No icons match.	Немає відповідних піктограм.
+No Recolor	Без перефарбування
+Office Theme	Тема Office
 Out with Bounce	Назовні з відскоком
 Particles In	Частинки всередину
 Particles Out	Частинки назовні
 Paste Special	Спеціальне вставлення
 Paste Special…	Спеціальне вставлення…
 Peanut	Арахіс
+Photo Album…	Фотоальбом…
 Pick a design for this slide. Ideas are generated on your device.	Виберіть оформлення для цього слайда. Ідеї створюються на вашому пристрої.
+Picture Border	Межа зображення
+Picture Style Gallery	Колекція стилів зображення
 Point Type	Тип точки
 Points	Точки
 Previous Comment	Попередній коментар
+Recolor	Перефарбувати
+Recolor Gallery	Колекція перефарбування
+Replace Fonts	Замінити шрифти
 Rescan Installed Fonts	Повторно знайти встановлені шрифти
 S Curve 1	S-крива 1
 S Curve 2	S-крива 2
+Sepia	Сепія
+Set Transparent Color	Установити прозорий колір
 Sine Wave	Синусоїда
 Single Left	Одинарно ліворуч
 Single Right	Одинарно праворуч
@@ -1349,16 +1369,19 @@ Spiral Left	Спіраль ліворуч
 Spiral Right	Спіраль праворуч
 Spring	Пружина
 Stairs Down	Сходи вниз
+Starter Templates	Початкові шаблони
 Strips In	Смуги всередину
 Strips Out	Смуги назовні
 Swoosh	Змах
 Text Transform	Перетворення тексту
 Text Transparency	Прозорість тексту
+Themes and presentations	Теми й презентації
 Through Black From Left	Через чорний зліва
 Through Black From Right	Через чорний справа
 Vertical Figure 8	Вертикальна вісімка
 Vertical In	Вертикально всередину
 Vertical Out	Вертикально назовні
+Washout	Вицвітання
 Zigzag	Зигзаг
 Zoom and Rotate	Масштаб і обертання
 circle	коло

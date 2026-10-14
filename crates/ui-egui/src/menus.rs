@@ -10,6 +10,11 @@ use crate::theme::{self, Tokens};
 /// Shortcuts the UI handles itself (views, show, zoom, palette, file dialogs). True when consumed.
 pub fn ui_shortcut(app: &mut SlideApp, key: egui::Key, m: Mods) -> bool {
     use egui::Key::*;
+    if key == A && m.cmd && !m.shift && !m.alt && app.slides_list_focused() {
+        // The engine can't see which pane has focus, so the UI says so through the scope param.
+        let _ = app.run("edit.selectAll", json!({"scope": "slides"}));
+        return true;
+    }
     let id = match (key, m.cmd, m.shift, m.alt) {
         (F5, _, false, _) => {
             app.start_show(0, false);
@@ -214,6 +219,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 ("Zoom In", "view.zoomIn"),
                 ("Zoom Out", "view.zoomOut"),
                 ("Fit to Window", "view.fit"),
+                ("-", ""),
+                ("New Window", "view.newWindow"),
             ],
         ),
         (
@@ -231,6 +238,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 ("Table…", "insert.table"),
                 ("Chart", "insert.chart"),
                 ("Picture from File…", "app.insertPictureDialog"),
+                ("Photo Album…", "insert.photoAlbum"),
+                ("Edit Photo Album…", "insert.photoAlbumEdit"),
                 ("Audio from File…", "app.insertAudioDialog"),
                 ("Video from File…", "app.insertVideoDialog"),
             ],

@@ -12,7 +12,9 @@ pub mod insert;
 pub mod inspect;
 pub mod media;
 pub mod merge;
+pub mod picture_style;
 pub mod points;
+pub mod recolor;
 pub mod review;
 pub mod selection;
 pub mod shape;
@@ -134,6 +136,8 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(insert::specs());
         v.extend(shape::specs());
         v.extend(background::specs());
+        v.extend(picture_style::specs());
+        v.extend(recolor::specs());
         v.extend(arrange::specs());
         v.extend(selection::specs());
         v.extend(merge::specs());

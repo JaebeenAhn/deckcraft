@@ -6,11 +6,13 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+pub mod animtimeline;
 pub mod backstage;
 pub mod canvas;
 pub mod control;
 pub mod credits;
 pub mod dialogs;
+pub mod doc_window;
 pub mod eyedropper;
 pub mod fillui;
 pub mod i18n;
@@ -172,6 +174,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("view.collapseRibbon", "Collapse the Ribbon", Some("Cmd+F1"), "{}"),
     ("view.dark", "Dark Mode", None, "{on?: bool}"),
     ("view.grayscale", "Grayscale", None, "{on?: bool}"),
+    ("view.newWindow", "New Window", None, "{on?: bool, slide?: index, delta?: int}"),
     ("show.start", "Slide Show", Some("F5"), "{from?: index}"),
     ("show.presenter", "Presenter View", None, "{on?: bool}"),
     ("show.end", "End Show", None, "{}"),
@@ -194,6 +197,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.insertVideoDialog", "Video from File…", None, "{}"),
     ("app.saveAsDialog", "Save As…", None, "{}"),
     ("app.exportDialog", "Export…", None, "{}"),
+    ("app.browseThemeDialog", "Browse for Themes…", None, "{}"),
     ("app.dialog", "Open Dialog", None, "{id}"),
     ("app.pasteSpecial", "Paste Special…", Some("Cmd+Alt+V"), "{}"),
     ("app.links", "Community Links", None, "{}"),
@@ -206,6 +210,8 @@ pub struct Perf {
 }
 
 pub struct SlideApp {
+    /// Table Design's border pen (`color`, `width`, `dash` for `table.borders`).
+    pub table_pen: serde_json::Value,
     pub session: Session,
     pub services: Services,
     pub ui: UiState,
@@ -259,12 +265,19 @@ pub struct SlideApp {
     pub(crate) thumb_drag: Option<(usize, usize)>,
     /// Selection pane: folded groups, renaming, drag and drop.
     pub selpane: selpane::State,
+    /// View › New Window: a second window on one presentation. `None` when it is closed.
+    pub doc_window: Option<doc_window::DocWindow>,
+    /// Slide Sorter: folded sections, inline rename, dragging a whole section.
+    pub sorter: sorter::State,
+    /// The slide thumbnail pane was the last thing clicked, so ⌘A selects slides, not shapes.
+    pub(crate) slides_focused: bool,
 }
 
 impl SlideApp {
     pub fn new(session: Session, mut services: Services) -> Self {
         let audio_out = services.audio_out.take();
         SlideApp {
+            table_pen: serde_json::json!({"width": 1.0}),
             session,
             services,
             ui: UiState::default(),
@@ -301,6 +314,9 @@ impl SlideApp {
             ui_fonts: uifonts::UiFonts::default(),
             thumb_drag: None,
             selpane: selpane::State::default(),
+            doc_window: None,
+            sorter: sorter::State::default(),
+            slides_focused: false,
         }
     }
 
@@ -544,6 +560,7 @@ impl SlideApp {
                 self.restyle = true;
             }
             "view.grayscale" => self.ui.grayscale = self.flag(p, self.ui.grayscale),
+            "view.newWindow" => return doc_window::command(self, p),
             "show.start" => {
                 let from = p.get("from").and_then(Value::as_u64).map(|v| v as usize).unwrap_or(0);
                 self.start_show(from, false);
@@ -604,6 +621,17 @@ impl SlideApp {
             "app.saveAsDialog" => self.save_as_dialog("deckcraft"),
             "app.exportDialog" => self.dialog = Some(dialogs::Dialog::new("export")),
             "app.pasteSpecial" => self.dialog = Some(dialogs::Dialog::new("pasteSpecial")),
+            "app.browseThemeDialog" => {
+                if self.session.active().is_none() {
+                    return Err("open a presentation first".into());
+                }
+                if self.services.pick_open.is_some() {
+                    self.pick_and_insert("theme", "design.browseTheme");
+                } else {
+                    // The browser's asynchronous picker would open the file as a new document.
+                    self.set_status("Browse for Themes needs the desktop app for now".to_string());
+                }
+            }
             "app.dialog" => {
                 let d = p.get("id").and_then(Value::as_str).ok_or("missing `id`")?;
                 self.dialog = Some(dialogs::Dialog::new(d));
@@ -615,6 +643,12 @@ impl SlideApp {
             _ => return Err(format!("unknown UI command `{id}`")),
         }
         Ok(Value::Null)
+    }
+
+    /// Whether ⌘A should act on the slide list: always in the sorter, in Normal view once the
+    /// thumbnail pane has been clicked.
+    pub(crate) fn slides_list_focused(&self) -> bool {
+        self.ui.view == ViewMode::Sorter || (self.ui.view == ViewMode::Normal && self.slides_focused)
     }
 
     pub fn start_show(&mut self, from: usize, reading: bool) {
@@ -1020,6 +1054,7 @@ impl SlideApp {
         eyedropper::tick(self, &ctx);
         if self.show.is_some() {
             show::ui(self, ui);
+            doc_window::show(self, &ctx);
             self.perf.frame_ms = now_ms() - t0;
             return;
         }
@@ -1072,6 +1107,7 @@ impl SlideApp {
             ctx.copy_text(t);
         }
         self.drain_requests();
+        doc_window::show(self, &ctx);
         self.perf.frame_ms = now_ms() - t0;
     }
 
@@ -1214,9 +1250,19 @@ fn js_now() -> f64 {
 }
 
 #[cfg(test)]
+mod animpane_tests;
+#[cfg(test)]
+mod browsetheme_tests;
+#[cfg(test)]
 mod eyedropper_tests;
 #[cfg(test)]
+mod huge_deck_tests;
+#[cfg(test)]
 mod ime_tests;
+#[cfg(test)]
+mod replacefonts_tests;
+#[cfg(test)]
+mod slide_size_tests;
 #[cfg(test)]
 mod ui_soak_tests;
 
@@ -1417,6 +1463,42 @@ mod tests {
         app.run("app.home", json!({})).unwrap();
         assert!(!app.backstage_open(), "with nothing open the start screen shows anyway");
     }
+
+    /// View › New Window is a second window on the open presentation. Its slide is its own;
+    /// the editor's selection stays where it was. Closing the window leaves the document open.
+    #[test]
+    fn new_window_shows_the_same_document_on_its_own_slide() {
+        let mut app = SlideApp::new(Session::with_new(), Services::default());
+        app.session.execute("slide.new", &json!({})).unwrap();
+        app.session.execute("slide.go", &json!({"index": 1})).unwrap();
+        let err = {
+            let mut empty = SlideApp::new(Session::new(), Services::default());
+            empty.run("view.newWindow", json!({})).unwrap_err()
+        };
+        assert!(err.contains("presentation"), "{err}");
+
+        let name = app.session.active().unwrap().title();
+        let opened = app.run("view.newWindow", json!({})).unwrap();
+        assert_eq!(opened["open"], true);
+        assert_eq!(opened["window"], 2);
+        assert_eq!(opened["slide"], 1);
+        assert_eq!(opened["title"], format!("{name}:2"));
+        assert_eq!(app.session.active().unwrap().selection.slide, 1);
+
+        let moved = app.run("view.newWindow", json!({"delta": -1})).unwrap();
+        assert_eq!(moved["slide"], 0);
+        assert_eq!(app.doc_window.as_ref().unwrap().slide, 0);
+        assert_eq!(app.session.active().unwrap().selection.slide, 1, "the editor stays on its slide");
+
+        let again = app.run("view.newWindow", json!({})).unwrap();
+        assert_eq!(again["window"], 2);
+        assert_eq!(again["slide"], 0, "opening again keeps the window's slide");
+
+        app.session.execute("file.close", &json!({})).unwrap();
+        doc_window::show(&mut app, &egui::Context::default());
+        assert!(app.doc_window.is_none(), "closing the presentation closes the extra window");
+        assert!(app.session.active().is_none());
+    }
     fn canvas_harness() -> egui_kittest::Harness<'static, SlideApp> {
         let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(
             |ui, app: &mut SlideApp| {
@@ -1586,5 +1668,47 @@ mod tests {
         let d = harness.state().session.active().unwrap();
         let pasted = d.doc.slides[0].shapes.last().unwrap();
         assert!(pasted.text.as_ref().is_none_or(|t| t.text().is_empty()), "a copy of the rectangle, not a text box holding the marker");
+    }
+
+    /// #188: Ctrl/Cmd+A with the slide thumbnail pane focused selects every slide; with the
+    /// canvas focused it still selects shapes.
+    #[test]
+    fn select_all_follows_the_focused_pane() {
+        let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(
+            |ui, app: &mut SlideApp| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            },
+            SlideApp::new(Session::with_new(), Services::default()),
+        );
+        harness.run_steps(2);
+        for _ in 0..2 {
+            harness.state_mut().run("slide.new", json!({})).unwrap();
+        }
+        harness.state_mut().run("slide.go", json!({"index": 0})).unwrap();
+        harness.run_steps(3);
+        let click = |h: &mut egui_kittest::Harness<'_, SlideApp>, pos: egui::Pos2| {
+            h.event(egui::Event::PointerMoved(pos));
+            for pressed in [true, false] {
+                h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+            }
+            h.run_steps(2);
+        };
+        // Press in the thumbnail pane, then Cmd+A.
+        let w = harness.state().ui.thumbs_width;
+        click(&mut harness, egui::pos2(w / 2.0, 300.0));
+        assert!(harness.state().slides_focused);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        harness.run_steps(2);
+        let st = harness.state().session.active().unwrap();
+        assert_eq!(st.selection.slides.len(), 3, "every slide is selected");
+
+        // A press on the canvas moves focus away: Cmd+A selects shapes again.
+        click(&mut harness, egui::pos2(700.0, 400.0));
+        assert!(!harness.state().slides_focused);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        harness.run_steps(2);
+        let st = harness.state().session.active().unwrap();
+        assert!(!st.selection.shapes.is_empty(), "canvas select all picks the shapes");
     }
 }

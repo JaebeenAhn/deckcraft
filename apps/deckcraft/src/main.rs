@@ -113,6 +113,9 @@ fn services() -> Services {
                     &["wav", "mp3", "m4a", "m4b", "aac", "flac", "ogg", "oga", "opus", "aif", "aiff", "aifc", "caf", "wma", "weba", "mka"],
                 ),
                 "video" => d.add_filter(deckcraft_ui_egui::i18n::tr("Video"), &["mp4", "m4v", "mov", "webm", "mkv", "wmv"]),
+                "theme" => d
+                    .add_filter(deckcraft_ui_egui::i18n::tr("Themes and presentations"), &["thmx", "pptx", "potx", "ppsx"])
+                    .add_filter(deckcraft_ui_egui::i18n::tr("Office Theme"), &["thmx"]),
                 _ => d
                     .add_filter(deckcraft_ui_egui::i18n::tr("Presentations"), &["deckcraft", "pptx", "potx", "ppsx"])
                     .add_filter("DeckCraft", &["deckcraft"])

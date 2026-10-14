@@ -245,6 +245,27 @@ fn big(app: &mut SlideApp, ui: &mut Ui, icon: Icon, label: &str, id: &str, p: Va
     }
 }
 
+/// Photo Album is a split button: the main click starts a new album, the arrow edits one.
+fn photo_album_button(app: &mut SlideApp, ui: &mut Ui) {
+    let en = enabled(app, "insert.photoAlbum");
+    let (main, arrow) = big_button_ex(ui, Icon::Picture, "Photo\nAlbum", en, true, false);
+    let _ = main.clone().on_hover_text(tip("insert.photoAlbum", "Photo Album…"));
+    main.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, en, "Photo Album…"));
+    if let Some(a) = &arrow {
+        let _ = a.clone().on_hover_text("Photo Album options");
+        a.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, en, "Photo Album options"));
+    }
+    if main.clicked() {
+        run(app, "insert.photoAlbum", json!({}));
+    }
+    if let Some(a) = arrow {
+        egui::Popup::menu(&a).show(|ui| {
+            menu_item(app, ui, Icon::Picture, "New Photo Album…", "insert.photoAlbum", json!({}));
+            menu_item(app, ui, Icon::Picture, "Edit Photo Album…", "insert.photoAlbumEdit", json!({}));
+        });
+    }
+}
+
 fn small(app: &mut SlideApp, ui: &mut Ui, icon: Icon, label: &str, id: &str, p: Value) {
     let en = enabled(app, id);
     if small_button(ui, icon, label, en, false).on_hover_text(tip(id, label)).clicked() {
@@ -1043,6 +1064,11 @@ fn home(app: &mut SlideApp, ui: &mut Ui) {
     group(ui, |ui| {
         // Also under Arrange, but that is disabled until something is selected (#132).
         big(app, ui, Icon::SelectionPane, "Selection\nPane", "view.pane", json!({"pane": "selection"}));
+        if small_button(ui, Icon::Fonts, "Replace Fonts…", enabled(app, "font.replace"), false).clicked() {
+            app.dialog = Some(crate::dialogs::Dialog::new("replaceFonts"));
+        }
+    });
+    group(ui, |ui| {
         big(app, ui, Icon::DesignIdeas, "Design\nIdeas", "view.pane", json!({"pane": "designer"}));
     });
 }
@@ -1075,6 +1101,7 @@ fn insert(app: &mut SlideApp, ui: &mut Ui) {
     });
     group(ui, |ui| {
         big(app, ui, Icon::Picture, "Pictures", "app.insertPictureDialog", json!({}));
+        photo_album_button(app, ui);
         let r = big_button(ui, Icon::Screenshot, "Screenshot", false);
         let _ = r.on_hover_text(crate::i18n::tr("Screenshot (not available yet)"));
     });
@@ -1321,9 +1348,13 @@ fn design(app: &mut SlideApp, ui: &mut Ui) {
         {
             run(app, "design.theme", json!({"name": n}));
         }
+        if small_button(ui, Icon::Themes, "Browse for Themes…", enabled(app, "design.browseTheme"), false).clicked() {
+            run(app, "app.browseThemeDialog", json!({}));
+        }
     });
     group(ui, |ui| {
         let r = big_button(ui, Icon::Colors, "Colors", true);
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Colors"));
         egui::Popup::menu(&r).width(240.0).show(|ui| {
             for cs in deckcraft_model::theme::builtin_color_schemes() {
                 ui.horizontal(|ui| {
@@ -1343,13 +1374,24 @@ fn design(app: &mut SlideApp, ui: &mut Ui) {
                     }
                 });
             }
+            ui.separator();
+            if ui.button("Customize Colors…").clicked() {
+                run(app, "design.colors", json!({}));
+                ui.close();
+            }
         });
         let r = big_button(ui, Icon::Fonts, "Fonts", true);
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Fonts"));
         egui::Popup::menu(&r).width(220.0).show(|ui| {
             for fs in deckcraft_model::theme::builtin_font_schemes() {
                 if ui.button(format!("{}\n   {} / {}", fs.name, fs.major.latin, fs.minor.latin)).clicked() {
                     run(app, "design.fonts", json!({"name": fs.name}));
                 }
+            }
+            ui.separator();
+            if ui.button("Customize Fonts…").clicked() {
+                run(app, "design.fonts", json!({}));
+                ui.close();
             }
         });
         let r = big_button(ui, Icon::BackgroundStyles, "Background\nStyles", true);
@@ -2023,6 +2065,14 @@ fn view(app: &mut SlideApp, ui: &mut Ui) {
         }
     });
     group(ui, |ui| {
+        let has = app.session.active().is_some();
+        let on = app.doc_window.is_some();
+        let resp = big_button_ex(ui, Icon::NewWindow, "New\nWindow", has, false, on).0;
+        if resp.on_hover_text("Open another window on this presentation").clicked() {
+            let _ = app.run("view.newWindow", json!({}));
+        }
+    });
+    group(ui, |ui| {
         let gs = app.ui.grayscale;
         if big_button_ex(ui, Icon::Grayscale, "Grayscale", true, false, gs).0.clicked() {
             app.ui.grayscale = !gs;
@@ -2354,9 +2404,39 @@ fn picture_format(app: &mut SlideApp, ui: &mut Ui) {
                     run(app, "picture.adjust", json!({"saturation": s}));
                 }
             }
-            if ui.button(crate::i18n::tr("Grayscale")).clicked() {
-                run(app, "picture.adjust", json!({"grayscale": true}));
+            ui.separator();
+            ui.label(crate::i18n::tr("Recolor"));
+            let sc = scheme(app);
+            let presets = deckcraft_engine::cmd::recolor::presets();
+            let names: Vec<String> = presets.iter().map(|(_, l)| crate::i18n::tr(l).to_string()).collect();
+            if let Some(i) = widgets::gallery(
+                ui,
+                presets.len(),
+                vec2(40.0, 30.0),
+                None,
+                |p, r, i| {
+                    if let Some((id, _)) = presets.get(i) {
+                        paint_recolor(p, r, id, &sc);
+                    }
+                },
+                |i| names.get(i).cloned().unwrap_or_default(),
+            ) && let Some((id, _)) = presets.get(i)
+            {
+                run(app, "picture.recolor", json!({"preset": id}));
             }
+            ui.separator();
+            ui.menu_button("Set Transparent Color", |ui| {
+                ui.label("Pixels of this colour become transparent:");
+                if let Some(c) = widgets::color_grid(ui, &sc, Some("None")) {
+                    match c {
+                        Some(c) => {
+                            let rgb = c.resolve(&sc, None);
+                            run(app, "picture.transparentColor", json!({"color": format!("#{}", rgb.hex())}));
+                        }
+                        None => run(app, "picture.transparentColor", json!({"none": true})),
+                    }
+                }
+            });
         });
         let r = big_button(ui, Icon::Transparency, "Transparency", true);
         egui::Popup::menu(&r).show(|ui| {
@@ -2372,29 +2452,59 @@ fn picture_format(app: &mut SlideApp, ui: &mut Ui) {
         });
     });
     group(ui, |ui| {
-        let r = big_button(ui, Icon::QuickStyles, "Picture\nStyles", true);
-        egui::Popup::menu(&r).show(|ui| {
-            if ui.button(crate::i18n::tr("Simple Frame, White")).clicked() {
-                run(app, "shape.line", json!({"color": "#FFFFFF", "width": 6}));
-                run(app, "shape.effects", json!({"shadow": "outer"}));
+        use deckcraft_engine::cmd::picture_style::{STYLES, look};
+        let names: Vec<String> = STYLES.iter().map(|(_, l)| crate::i18n::tr(l).to_string()).collect();
+        if let Some(i) = widgets::gallery(
+            ui,
+            STYLES.len(),
+            vec2(56.0, 44.0),
+            None,
+            |p, r, i| paint_picture_style(p, r, STYLES.get(i).and_then(|(id, _)| look(id))),
+            |i| names.get(i).cloned().unwrap_or_default(),
+        ) && let Some((id, _)) = STYLES.get(i)
+        {
+            run(app, "picture.style", json!({"style": id}));
+        }
+    });
+    group(ui, |ui| {
+        let sc = scheme(app);
+        let (m, a) = color_split(ui, Icon::QuickStyles, crate::i18n::tr("Picture Border"), Color32::BLACK, true);
+        if m.clicked() {
+            run(app, "shape.line", json!({"color": "#000000", "width": 1.0}));
+        }
+        widgets::color_popup(&a).show(|ui| {
+            if let Some(c) = widgets::color_grid(ui, &sc, Some(crate::i18n::tr("No Outline"))) {
+                match c {
+                    Some(c) => run(app, "shape.line", json!({"color": cref_param(&c)})),
+                    None => run(app, "shape.line", json!({"none": true})),
+                }
             }
-            if ui.button(crate::i18n::tr("Drop Shadow Rectangle")).clicked() {
-                run(app, "shape.effects", json!({"shadow": "bottom"}));
-            }
-            if ui.button(crate::i18n::tr("Rounded Diagonal Corner")).clicked() {
-                run(app, "shape.change", json!({"preset": "round2DiagRect"}));
-            }
-            if ui.button(crate::i18n::tr("Soft Edge Rectangle")).clicked() {
-                run(app, "shape.effects", json!({"softEdges": 10}));
-            }
-            if ui.button(crate::i18n::tr("Reflected Rounded Rectangle")).clicked() {
-                run(app, "shape.change", json!({"preset": "roundRect"}));
-                run(app, "shape.effects", json!({"reflection": "half"}));
-            }
-            if ui.button(crate::i18n::tr("Oval")).clicked() {
-                run(app, "shape.change", json!({"preset": "ellipse"}));
-            }
+            ui.separator();
+            ui.menu_button("Weight", |ui| {
+                for w in [0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0] {
+                    if ui.button(format!("{w} pt")).clicked() {
+                        run(app, "shape.line", json!({"width": w}));
+                    }
+                }
+            });
+            ui.menu_button("Dashes", |ui| {
+                for (l, d) in [
+                    ("Solid", "solid"),
+                    ("Round Dot", "sysDot"),
+                    ("Square Dot", "sysDash"),
+                    ("Dash", "dash"),
+                    ("Dash Dot", "dashDot"),
+                    ("Long Dash", "lgDash"),
+                ] {
+                    if ui.button(l).clicked() {
+                        run(app, "shape.line", json!({"dash": d}));
+                    }
+                }
+            });
         });
+        if ui.small_button("Reset Style").on_hover_text("Remove the picture style").clicked() {
+            run(app, "picture.style", json!({"style": "none"}));
+        }
         big(app, ui, Icon::AltText, "Alt\nText", "app.dialog", json!({"id": "altText"}));
     });
     arrange_group(app, ui);
@@ -2506,6 +2616,124 @@ fn table_design(app: &mut SlideApp, ui: &mut Ui) {
             }
         });
     });
+    group(ui, |ui| {
+        let r = big_button(ui, Icon::Borders, "Borders", true);
+        egui::Popup::menu(&r).show(|ui| {
+            let pen = app.table_pen.clone();
+            for (label, which) in [
+                ("No Border", "none"),
+                ("All Borders", "all"),
+                ("Outside Borders", "outside"),
+                ("Inside Borders", "inside"),
+                ("Top Border", "top"),
+                ("Bottom Border", "bottom"),
+                ("Left Border", "left"),
+                ("Right Border", "right"),
+                ("Inside Horizontal Border", "insideH"),
+                ("Inside Vertical Border", "insideV"),
+                ("Diagonal Down Border", "diagDown"),
+                ("Diagonal Up Border", "diagUp"),
+            ] {
+                let mut p = pen.clone();
+                p["which"] = json!(which);
+                menu_item(app, ui, Icon::Borders, label, "table.borders", p);
+            }
+            ui.separator();
+            ui.menu_button("Pen Weight", |ui| {
+                for w in [0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0] {
+                    let cur = app.table_pen.get("width").and_then(Value::as_f64) == Some(w);
+                    if ui.radio(cur, format!("{w} pt")).clicked() {
+                        app.table_pen["width"] = json!(w);
+                    }
+                }
+            });
+            ui.menu_button("Pen Style", |ui| {
+                for (l, d) in [("Solid", "solid"), ("Dash", "dash"), ("Dot", "sysDot"), ("Dash Dot", "dashDot"), ("Long Dash", "lgDash")] {
+                    let cur = app.table_pen.get("dash").and_then(Value::as_str).unwrap_or("solid") == d;
+                    if ui.radio(cur, l).clicked() {
+                        app.table_pen["dash"] = json!(d);
+                    }
+                }
+            });
+            ui.menu_button("Pen Color", |ui| {
+                let sc = scheme(app);
+                if let Some(Some(c)) = widgets::color_grid(ui, &sc, None) {
+                    app.table_pen["color"] = cref_param(&c);
+                }
+            });
+        });
+    });
+}
+
+/// A Picture Styles gallery tile: a landscape "picture" in the style's shape and frame.
+fn paint_picture_style(p: &egui::Painter, r: Rect, lk: Option<deckcraft_engine::cmd::picture_style::Look>) {
+    let Some(lk) = lk else { return };
+    let r = r.shrink(7.0);
+    if lk.shadow.is_some() {
+        p.rect_filled(r.translate(vec2(2.0, 2.0)), CornerRadius::same(2), Color32::from_black_alpha(60));
+    }
+    let sky = Color32::from_rgb(0x7F, 0xB2, 0xE5);
+    let frame = lk.frame.map(|(c, w)| Stroke::new((w as f32 / 2.5).clamp(1.0, 4.0), theme::to_color32(c)));
+    let edge = Stroke::new(0.5, Color32::from_gray(150));
+    match lk.preset {
+        "ellipse" => {
+            p.add(egui::Shape::ellipse_filled(r.center(), r.size() / 2.0, sky));
+            p.add(egui::Shape::ellipse_stroke(r.center(), r.size() / 2.0, frame.unwrap_or(edge)));
+        }
+        preset => {
+            let round = if preset == "rect" { 0 } else { 6 };
+            p.rect_filled(r, CornerRadius::same(round), sky);
+            p.rect_stroke(r, CornerRadius::same(round), frame.unwrap_or(edge), egui::StrokeKind::Middle);
+        }
+    }
+    // Hills, so the tile reads as a picture.
+    let base = r.bottom() - r.height() * 0.15;
+    p.line_segment(
+        [pos2(r.left() + r.width() * 0.2, base), pos2(r.center().x, r.top() + r.height() * 0.45)],
+        Stroke::new(1.5, Color32::from_rgb(0x3A, 0x7D, 0x44)),
+    );
+    p.line_segment(
+        [pos2(r.center().x, r.top() + r.height() * 0.45), pos2(r.right() - r.width() * 0.2, base)],
+        Stroke::new(1.5, Color32::from_rgb(0x3A, 0x7D, 0x44)),
+    );
+    if lk.reflection {
+        p.rect_filled(
+            Rect::from_min_max(pos2(r.left(), r.bottom() + 1.0), pos2(r.right(), r.bottom() + 5.0)),
+            CornerRadius::ZERO,
+            sky.gamma_multiply(0.3),
+        );
+    }
+}
+
+/// A Recolor gallery tile: a dark-to-light ramp as the preset would draw it.
+fn paint_recolor(p: &egui::Painter, r: Rect, id: &str, sc: &deckcraft_color::ColorScheme) {
+    let mut adj = deckcraft_model::style::PictureAdjust::default();
+    deckcraft_engine::cmd::recolor::apply(&mut adj, id);
+    let r = r.shrink(3.0);
+    let n = 8;
+    for k in 0..n {
+        let t = k as f64 / (n - 1) as f64;
+        // A colourful ramp, so "No Recolor" shows colour and the presets show their mapping.
+        let src = [t * 255.0, (0.4 + 0.6 * t) * 200.0, (1.0 - t) * 220.0];
+        let y = 0.299 * src[0] + 0.587 * src[1] + 0.114 * src[2];
+        let mut rgb = if adj.grayscale { [y; 3] } else { src };
+        if adj.brightness != 0.0 || adj.contrast != 0.0 {
+            rgb = rgb.map(|v| (v - 127.5) * (1.0 + adj.contrast) + 127.5 + adj.brightness * 255.0);
+        }
+        if let Some((d, l)) = &adj.duotone {
+            let (d, l) = (d.resolve(sc, None), l.resolve(sc, None));
+            let u = y / 255.0;
+            rgb =
+                [d.r as f64 + (l.r as f64 - d.r as f64) * u, d.g as f64 + (l.g as f64 - d.g as f64) * u, d.b as f64 + (l.b as f64 - d.b as f64) * u];
+        }
+        if let Some(th) = adj.bilevel {
+            rgb = [if y >= th * 255.0 { 255.0 } else { 0.0 }; 3];
+        }
+        let c = Color32::from_rgb(rgb[0].clamp(0.0, 255.0) as u8, rgb[1].clamp(0.0, 255.0) as u8, rgb[2].clamp(0.0, 255.0) as u8);
+        let w = r.width() / n as f32;
+        p.rect_filled(Rect::from_min_size(pos2(r.left() + k as f32 * w, r.top()), vec2(w + 0.5, r.height())), CornerRadius::ZERO, c);
+    }
+    p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(0.5, Color32::from_gray(160)), egui::StrokeKind::Outside);
 }
 
 pub fn paint_table_style(p: &egui::Painter, r: Rect, id: &str, sc: &deckcraft_color::ColorScheme) {
@@ -2572,10 +2800,18 @@ fn table_layout(app: &mut SlideApp, ui: &mut Ui) {
             });
             ui.horizontal(|ui| {
                 for (l, a) in [("Top", "top"), ("Center", "middle"), ("Bottom", "bottom")] {
-                    if ui.small_button(crate::i18n::tr(l)).clicked() {
-                        run(app, "format.anchor", json!({"anchor": a}));
+                    if ui.small_button(crate::i18n::tr(l)).on_hover_text(format!("Align text to the {l} of the cell").to_lowercase()).clicked() {
+                        run(app, "table.cellAlign", json!({"anchor": a}));
                     }
                 }
+                ui.menu_button("Cell Margins", |ui| {
+                    for (l, preset) in [("Normal", "normal"), ("None", "none"), ("Narrow", "narrow"), ("Wide", "wide")] {
+                        if ui.button(l).clicked() {
+                            run(app, "table.cellMargins", json!({"preset": preset}));
+                            ui.close();
+                        }
+                    }
+                });
             });
         });
     });
@@ -2679,6 +2915,10 @@ fn slide_master(app: &mut SlideApp, ui: &mut Ui) {
                 if ui.button(&th.name).clicked() {
                     run(app, "design.theme", json!({"name": th.name}));
                 }
+            }
+            ui.separator();
+            if ui.button("Browse for Themes…").clicked() {
+                run(app, "app.browseThemeDialog", json!({}));
             }
         });
         big(app, ui, Icon::FormatBackground, "Background\nStyles", "view.pane", json!({"pane": "background"}));

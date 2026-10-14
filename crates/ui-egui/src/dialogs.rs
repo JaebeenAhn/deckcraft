@@ -1,6 +1,7 @@
 //! Dialogs (Insert Table, Slide Size, Header & Footer, Hyperlink, Set Up Show, Zoom, …) and the
 //! About window. The start screen is File › Home (`backstage.rs`).
 
+use deckcraft_color::SchemeSlot;
 use egui::{Align2, Color32, CornerRadius, Rect, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
 
@@ -48,6 +49,8 @@ fn title(id: &str) -> &'static str {
         "preferences" => "Preferences",
         "export" => "Export",
         "symbol" => "Symbol",
+        "photoAlbum" => "Photo Album",
+        "replaceFonts" => "Replace Font",
         "equation" => "Equation",
         "spelling" => "Spelling",
         "pasteSpecial" => "Paste Special",
@@ -59,6 +62,8 @@ fn title(id: &str) -> &'static str {
         "smartart" => "Choose a SmartArt Graphic",
         "bullets" => "Bullets and Numbering",
         "quit" => "DeckCraft",
+        "themeColors" => "Create New Theme Colors",
+        "themeFonts" => "Create New Theme Fonts",
         _ => "DeckCraft",
     }
 }
@@ -67,16 +72,32 @@ pub fn show(app: &mut SlideApp, ctx: &egui::Context) {
     let Some(mut d) = app.dialog.take() else { return };
     let mut open = true;
     let mut close = false;
-    egui::Window::new(crate::i18n::tr(title(&d.id)))
+    let mut window = egui::Window::new(crate::i18n::tr(title(&d.id)))
         .id(egui::Id::new(("dialog", d.id.clone())))
         .collapsible(false)
         .resizable(false)
         .anchor(Align2::CENTER_CENTER, vec2(0.0, -40.0))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            ui.set_min_width(340.0);
-            close = body(app, ui, &mut d);
+        .open(&mut open);
+    // Two columns of colour rows plus Save must fit the first frame (Theme Colors), as must Save
+    // in Theme Fonts. A later resize clips the buttons (the window size sticks) and clicks miss them.
+    if d.id == "themeColors" {
+        window = window.default_size(vec2(760.0, 420.0)).min_width(720.0).min_height(420.0);
+    } else if d.id == "themeFonts" {
+        window = window.default_size(vec2(460.0, 320.0)).min_width(420.0).min_height(300.0);
+    }
+    window.show(ctx, |ui| {
+        ui.set_min_width(match d.id.as_str() {
+            "themeColors" => 700.0,
+            "themeFonts" => 400.0,
+            _ => 340.0,
         });
+        if d.id == "themeColors" {
+            ui.set_min_height(360.0);
+        } else if d.id == "themeFonts" {
+            ui.set_min_height(280.0);
+        }
+        close = body(app, ui, &mut d);
+    });
     if open && !close && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.dialog = Some(d);
     }
@@ -111,6 +132,18 @@ fn field(ui: &mut Ui, d: &mut Dialog, label: &str, key: &str, default: &str) {
     d.fields.insert(key.into(), v);
 }
 
+/// "Mark as decorative" starts checked when every selected shape is already decorative.
+fn alt_text_starts_decorative(decorative: impl IntoIterator<Item = bool>) -> bool {
+    let mut any = false;
+    for on in decorative {
+        if !on {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
 fn check(ui: &mut Ui, d: &mut Dialog, label: &str, key: &str, default: bool) -> bool {
     let mut v = d.get(key, if default { "1" } else { "0" }) == "1";
     ui.checkbox(&mut v, crate::i18n::tr(label));
@@ -120,6 +153,538 @@ fn check(ui: &mut Ui, d: &mut Dialog, label: &str, key: &str, default: bool) -> 
 
 fn num(d: &mut Dialog, key: &str, default: f64) -> f64 {
     d.get(key, "").trim().trim_end_matches(['"', '%', ' ']).parse::<f64>().ok().filter(|v| v.is_finite()).unwrap_or(default)
+}
+
+fn album_items(d: &Dialog) -> Option<Vec<Value>> {
+    let raw = d.fields.get("items").map(String::as_str).unwrap_or("[]");
+    serde_json::from_str::<Value>(raw).ok().and_then(|v| v.as_array().cloned())
+}
+
+fn store_album_items(d: &mut Dialog, items: &[Value]) {
+    let raw = serde_json::to_string(items).unwrap_or_else(|_| "[]".into());
+    d.fields.insert("items".into(), raw);
+}
+
+fn album_item_label(v: &Value) -> String {
+    if let Some(text) = v.get("text").and_then(Value::as_str) {
+        let text = text.trim();
+        if text.is_empty() { "Text Box".to_string() } else { format!("Text: {text}") }
+    } else {
+        v.get("name").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("Picture").to_string()
+    }
+}
+
+fn pick_album_picture(app: &mut SlideApp) -> Option<Value> {
+    let path = if let Some(pick) = app.services.pick_open.as_mut() {
+        pick("picture")
+    } else {
+        app.set_status("Pass pictures to insert.photoAlbum");
+        None
+    };
+    let path = path?;
+    let loaded = if let Some(read) = app.services.read.as_ref() {
+        match read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                app.set_status(e);
+                return None;
+            }
+        }
+    } else {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    app.set_status(format!("{path}: {e}"));
+                    return None;
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            app.set_status("The web build inserts album pictures from data passed to insert.photoAlbum");
+            return None;
+        }
+    };
+    if loaded.is_empty() {
+        app.set_status("That file is empty");
+        return None;
+    }
+    if loaded.len() > 32 * 1024 * 1024 {
+        app.set_status("That picture is larger than 32 MB");
+        return None;
+    }
+    let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).filter(|s| !s.is_empty()).unwrap_or("picture").to_string();
+    Some(json!({"name": name, "data": deckcraft_engine::cmd::base64_encode(&loaded)}))
+}
+
+fn album_choice(ui: &mut Ui, d: &mut Dialog, id: &str, key: &str, default: &str, choices: &[(&str, &str)]) {
+    let cur = d.get(key, default);
+    let label = choices.iter().find(|(k, _)| *k == cur).map(|(_, l)| *l).unwrap_or(default);
+    let opened = egui::ComboBox::from_id_salt(id).selected_text(label).width(220.0).show_ui(ui, |ui| {
+        for (k, l) in choices {
+            if ui.selectable_label(cur == *k, *l).clicked() {
+                d.fields.insert(key.into(), (*k).to_string());
+            }
+        }
+    });
+    opened.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, label));
+}
+
+const ALBUM_THEMES: &[&str] = &["DeckCraft", "Harbor", "Ember", "Meadow", "Nocturne", "Paper", "Coral Reef", "Slate"];
+
+fn current_theme(app: &SlideApp) -> String {
+    app.session
+        .active()
+        .and_then(|d| d.doc.masters.first())
+        .map(|m| m.theme.name.clone())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "DeckCraft".into())
+}
+
+fn album_json_id(v: &Value) -> Option<u64> {
+    v.as_u64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+}
+
+/// Copy a command's dialog params into fields once. A fresh album has no `items`.
+fn seed_photo_album(app: &SlideApp, d: &mut Dialog) {
+    if d.fields.contains_key("seeded") {
+        return;
+    }
+    d.fields.insert("seeded".into(), "1".into());
+    let p = d.params.clone();
+    if let Some(items) = p.get("items").and_then(Value::as_array) {
+        store_album_items(d, items);
+        d.fields.insert("editing".into(), "1".into());
+    }
+    for key in ["layout", "frame", "theme"] {
+        if let Some(v) = p.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()) {
+            d.fields.insert(key.into(), v.to_string());
+        }
+    }
+    for key in ["captions", "grayscale"] {
+        if let Some(v) = p.get(key).and_then(Value::as_bool) {
+            d.fields.insert(key.into(), if v { "1".into() } else { "0".into() });
+        }
+    }
+    if let Some(id) = p.get("album").and_then(album_json_id).filter(|n| *n != 0) {
+        d.fields.insert("album".into(), id.to_string());
+    }
+    let theme_was = d.fields.get("theme").cloned().filter(|s| !s.is_empty()).unwrap_or_else(|| current_theme(app));
+    if !d.fields.contains_key("theme") {
+        d.fields.insert("theme".into(), theme_was.clone());
+    }
+    d.fields.entry("themeWas".into()).or_insert(theme_was);
+}
+
+fn selected_album_picture(d: &Dialog, items: &[Value]) -> bool {
+    let i = d.fields.get("sel").and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+    items.get(i).is_some_and(|item| item.get("data").is_some() || item.get("path").is_some())
+}
+
+fn with_selected_picture(d: &mut Dialog, f: impl FnOnce(&mut serde_json::Map<String, Value>)) {
+    let Some(mut list) = album_items(d) else { return };
+    let i = d.fields.get("sel").and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+    let Some(item) = list.get_mut(i) else { return };
+    if item.get("data").is_none() && item.get("path").is_none() {
+        return;
+    }
+    let Some(obj) = item.as_object_mut() else { return };
+    f(obj);
+    store_album_items(d, &list);
+}
+
+/// Photo Album. Returns true when the dialog should close.
+fn photo_album_dialog(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
+    seed_photo_album(app, d);
+    ui.set_min_width(440.0);
+    egui::ScrollArea::vertical().max_height(520.0).id_salt("album_body").show(ui, |ui| {
+        ui.set_min_width(420.0);
+        ui.label("Pictures in album");
+        let items = album_items(d).unwrap_or_default();
+        let mut sel = d.get("sel", "0").parse::<usize>().unwrap_or(0);
+        // Fixed height so adding pictures does not push Create past the window.
+        egui::ScrollArea::vertical().max_height(120.0).min_scrolled_height(120.0).auto_shrink([false, false]).id_salt("album_list").show(ui, |ui| {
+            if items.is_empty() {
+                ui.label(egui::RichText::new("No pictures yet").color(Tokens::get(ui.ctx()).text_dim));
+            }
+            for (i, item) in items.iter().enumerate() {
+                if ui.selectable_label(sel == i, album_item_label(item)).clicked() {
+                    sel = i;
+                }
+            }
+        });
+        d.fields.insert("sel".into(), sel.to_string());
+        ui.horizontal(|ui| {
+            if ui.button("Add Pictures…").clicked()
+                && let Some(item) = pick_album_picture(app)
+            {
+                match album_items(d) {
+                    Some(mut list) if list.len() < 48 => {
+                        list.push(item);
+                        let next = list.len().saturating_sub(1);
+                        store_album_items(d, &list);
+                        d.fields.insert("sel".into(), next.to_string());
+                    }
+                    Some(_) => app.set_status("A photo album holds at most 48 pictures or text boxes"),
+                    None => app.set_status("The picture list is invalid"),
+                }
+            }
+            if ui.button("New Text Box").clicked() {
+                let text = d.get("boxText", "Text Box");
+                let text = text.trim();
+                if text.is_empty() {
+                    app.set_status("Type the text for the new text box");
+                } else if text.chars().count() > 400 {
+                    app.set_status("Text is longer than 400 characters");
+                } else if let Some(mut list) = album_items(d) {
+                    if list.len() >= 48 {
+                        app.set_status("A photo album holds at most 48 pictures or text boxes");
+                    } else {
+                        list.push(json!({"text": text}));
+                        let next = list.len().saturating_sub(1);
+                        store_album_items(d, &list);
+                        d.fields.insert("sel".into(), next.to_string());
+                    }
+                }
+            }
+            if ui.button("Remove").clicked()
+                && let Some(mut list) = album_items(d)
+                && let Some(i) = d.get("sel", "0").parse::<usize>().ok()
+                && i < list.len()
+            {
+                list.remove(i);
+                store_album_items(d, &list);
+                let next = i.min(list.len().saturating_sub(1));
+                d.fields.insert("sel".into(), next.to_string());
+            }
+        });
+        field(ui, d, "Text box:", "boxText", "Text Box");
+        let picture = selected_album_picture(d, &items);
+        ui.label(album_picture_status(&items, sel));
+        ui.horizontal_wrapped(|ui| {
+            ui.add_enabled_ui(picture, |ui| {
+                if ui.button("Rotate Left").clicked() {
+                    with_selected_picture(d, |obj| {
+                        let cur = obj.get("rot").and_then(Value::as_f64).unwrap_or(0.0);
+                        let next = ((cur - 90.0) % 360.0 + 360.0) % 360.0;
+                        obj.insert("rot".into(), json!(next));
+                    });
+                }
+                if ui.button("Rotate Right").clicked() {
+                    with_selected_picture(d, |obj| {
+                        let cur = obj.get("rot").and_then(Value::as_f64).unwrap_or(0.0);
+                        let next = ((cur + 90.0) % 360.0 + 360.0) % 360.0;
+                        obj.insert("rot".into(), json!(next));
+                    });
+                }
+                if ui.button("More Brightness").clicked() {
+                    nudge_picture(d, "brightness", 0.1);
+                }
+                if ui.button("Less Brightness").clicked() {
+                    nudge_picture(d, "brightness", -0.1);
+                }
+                if ui.button("More Contrast").clicked() {
+                    nudge_picture(d, "contrast", 0.1);
+                }
+                if ui.button("Less Contrast").clicked() {
+                    nudge_picture(d, "contrast", -0.1);
+                }
+            });
+        });
+        ui.add_space(4.0);
+        ui.label("Picture layout");
+        album_choice(
+            ui,
+            d,
+            "album_layout",
+            "layout",
+            "1",
+            &[
+                ("fit", "Fit to slide"),
+                ("1", "1 picture"),
+                ("2", "2 pictures"),
+                ("4", "4 pictures"),
+                ("1title", "1 picture with title"),
+                ("2title", "2 pictures with title"),
+                ("4title", "4 pictures with title"),
+            ],
+        );
+        ui.label("Frame shape");
+        album_choice(
+            ui,
+            d,
+            "album_frame",
+            "frame",
+            "rect",
+            &[("none", "None"), ("rect", "Rectangle"), ("rounded", "Rounded"), ("simple", "Simple, white")],
+        );
+        check(ui, d, "Captions under pictures", "captions", false);
+        check(ui, d, "ALL pictures black and white", "grayscale", false);
+        ui.label("Album theme");
+        album_choice(ui, d, "album_theme", "theme", "DeckCraft", &ALBUM_THEMES.iter().map(|n| (*n, *n)).collect::<Vec<_>>());
+    });
+    let captions = d.fields.get("captions").is_some_and(|v| v == "1");
+    let grayscale = d.fields.get("grayscale").is_some_and(|v| v == "1");
+    let editing = d.fields.get("editing").is_some_and(|v| v == "1");
+    let (ok, cancel) = buttons(ui, if editing { "Update" } else { "Create" });
+    if ok {
+        let Some(list) = album_items(d) else {
+            app.set_status("The picture list is invalid");
+            return false;
+        };
+        if list.is_empty() {
+            app.set_status("Add a picture or a text box first");
+            return false;
+        }
+        let layout = d.get("layout", "1");
+        let frame = d.get("frame", "rect");
+        let theme = d.get("theme", "DeckCraft");
+        let theme_was = d.fields.get("themeWas").cloned().unwrap_or_default();
+        let mut payload = json!({"pictures": list, "layout": layout, "frame": frame, "captions": captions, "grayscale": grayscale});
+        if theme != theme_was
+            && let Some(obj) = payload.as_object_mut()
+        {
+            obj.insert("theme".into(), json!(theme));
+        }
+        if editing {
+            if let Some(album) = d.fields.get("album").filter(|s| !s.is_empty() && s.as_str() != "0")
+                && let Ok(id) = album.parse::<u64>()
+                && let Some(obj) = payload.as_object_mut()
+            {
+                obj.insert("album".into(), json!(id));
+            }
+            return app.run("insert.photoAlbumEdit", payload).is_ok();
+        }
+        return app.run("insert.photoAlbum", payload).is_ok();
+    }
+    cancel
+}
+
+fn album_picture_status(items: &[Value], sel: usize) -> String {
+    let Some(item) = items.get(sel) else {
+        return "Select a picture to rotate it or change brightness and contrast".into();
+    };
+    if item.get("data").is_none() && item.get("path").is_none() {
+        return "Text boxes have no picture options".into();
+    }
+    let rot = item.get("rot").and_then(Value::as_f64).unwrap_or(0.0);
+    let brightness = item.get("brightness").and_then(Value::as_f64).unwrap_or(0.0);
+    let contrast = item.get("contrast").and_then(Value::as_f64).unwrap_or(0.0);
+    format!("Rotation {rot:.0}°, brightness {brightness:.1}, contrast {contrast:.1}")
+}
+
+fn nudge_picture(d: &mut Dialog, key: &str, delta: f64) {
+    with_selected_picture(d, |obj| {
+        let cur = obj.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+        let next = (((cur + delta) * 10.0).round() / 10.0).clamp(-1.0, 1.0);
+        obj.insert(key.into(), json!(next));
+    });
+}
+
+fn seed_theme_colors(d: &mut Dialog) {
+    if d.fields.contains_key("seeded") {
+        return;
+    }
+    let name = d.params.get("name").and_then(Value::as_str).unwrap_or("Custom");
+    d.fields.insert("schemeName".into(), name.to_string());
+    let obj = d.params.get("colors").and_then(Value::as_object);
+    for slot in SchemeSlot::THEME {
+        let hex = obj.and_then(|o| o.get(slot.xml_name())).and_then(Value::as_str).unwrap_or("000000");
+        d.fields.insert(slot.xml_name().into(), hex.to_string());
+    }
+    d.fields.insert("seeded".into(), "1".into());
+}
+
+fn theme_color_row(ui: &mut Ui, d: &mut Dialog, slot: SchemeSlot) {
+    let key = slot.xml_name();
+    let mut v = d.get(key, "000000");
+    ui.horizontal(|ui| {
+        ui.add_sized(vec2(188.0, 18.0), egui::Label::new(slot.label()));
+        let fill = deckcraft_color::Rgba::from_hex(&v).map(theme::to_color32).unwrap_or_else(|| Color32::from_gray(200));
+        let (rect, _) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+        ui.painter().rect(rect, CornerRadius::same(2), fill, Stroke::new(1.0, Tokens::get(ui.ctx()).border), egui::StrokeKind::Inside);
+        let resp = ui.add(egui::TextEdit::singleline(&mut v).desired_width(84.0).id_salt(("theme-hex", key)));
+        let shown = v.clone();
+        resp.widget_info(move || {
+            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, format!("{} hex", slot.label()));
+            info.current_text_value = Some(shown.clone());
+            info
+        });
+    });
+    d.fields.insert(key.into(), v);
+}
+
+fn theme_color_payload(d: &mut Dialog) -> Result<Value, String> {
+    let name = d.get("schemeName", "").trim().to_string();
+    if name.is_empty() {
+        return Err("Enter a scheme name.".into());
+    }
+    let mut colors = serde_json::Map::new();
+    for slot in SchemeSlot::THEME {
+        let raw = d.get(slot.xml_name(), "");
+        let Some(rgb) = deckcraft_color::Rgba::from_hex(raw.trim()) else {
+            return Err(format!("{} needs a colour like #RRGGBB.", slot.label()));
+        };
+        colors.insert(slot.xml_name().into(), Value::String(format!("#{}", rgb.hex())));
+    }
+    Ok(json!({"name": name, "colors": colors}))
+}
+
+/// Create New Theme Colors. Returns true when the dialog should close.
+fn theme_colors_dialog(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
+    seed_theme_colors(d);
+    // The window keeps the height of its contents and will not grow after the first frame, so the
+    // rows stay short enough that Save is inside that rect.
+    ui.style_mut().spacing.interact_size.y = 16.0;
+    ui.style_mut().spacing.item_spacing.y = 2.0;
+    ui.style_mut().spacing.button_padding.y = 2.0;
+    let left = [SchemeSlot::Dk1, SchemeSlot::Lt1, SchemeSlot::Dk2, SchemeSlot::Lt2, SchemeSlot::Hlink, SchemeSlot::FolHlink];
+    let right = [SchemeSlot::Accent1, SchemeSlot::Accent2, SchemeSlot::Accent3, SchemeSlot::Accent4, SchemeSlot::Accent5, SchemeSlot::Accent6];
+    egui::Grid::new("theme-colors").spacing(vec2(18.0, 4.0)).show(ui, |ui| {
+        for (a, b) in left.into_iter().zip(right) {
+            theme_color_row(ui, d, a);
+            theme_color_row(ui, d, b);
+            ui.end_row();
+        }
+    });
+    ui.add_space(6.0);
+    let mut name = d.get("schemeName", "");
+    ui.horizontal(|ui| {
+        ui.label("Name:");
+        let resp = ui.add(egui::TextEdit::singleline(&mut name).desired_width(280.0).id_salt("schemeName"));
+        let shown = name.clone();
+        resp.widget_info(move || {
+            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Scheme name");
+            info.current_text_value = Some(shown.clone());
+            info
+        });
+    });
+    d.fields.insert("schemeName".into(), name);
+    ui.label(egui::RichText::new("Applies to this presentation's theme colours.").size(11.0).color(Tokens::get(ui.ctx()).text_dim));
+    let (ok, cancel) = buttons(ui, "Save");
+    if ok {
+        match theme_color_payload(d) {
+            Ok(payload) => return app.run("design.colors", payload).is_ok(),
+            Err(msg) => {
+                app.set_status(msg);
+                return false;
+            }
+        }
+    }
+    cancel
+}
+
+fn seed_theme_fonts(d: &mut Dialog) {
+    if d.fields.contains_key("seeded") {
+        return;
+    }
+    let name = d.params.get("name").and_then(Value::as_str).unwrap_or("Custom");
+    let major = d.params.get("major").and_then(Value::as_str).unwrap_or("Inter");
+    let minor = d.params.get("minor").and_then(Value::as_str).unwrap_or(major);
+    d.fields.insert("schemeName".into(), name.to_string());
+    d.fields.insert("major".into(), major.to_string());
+    d.fields.insert("minor".into(), minor.to_string());
+    d.fields.insert("seeded".into(), "1".into());
+}
+
+fn theme_font_choices(app: &SlideApp, selected: &str) -> Vec<String> {
+    let mut v = crate::ribbon::font_families(app);
+    for scheme in deckcraft_model::theme::builtin_font_schemes() {
+        v.push(scheme.major.latin);
+        v.push(scheme.minor.latin);
+    }
+    if !selected.is_empty() {
+        v.push(selected.to_string());
+    }
+    let mut seen = std::collections::HashSet::new();
+    v.retain(|face| !face.is_empty() && seen.insert(face.clone()));
+    v
+}
+
+fn font_combo(ui: &mut Ui, label: &str, choices: &[String], selected: &mut String) {
+    let resp = egui::ComboBox::from_id_salt(label).selected_text(selected.as_str()).width(240.0).show_ui(ui, |ui| {
+        for face in choices {
+            if ui.selectable_label(selected == face, face).clicked() {
+                *selected = face.clone();
+            }
+        }
+    });
+    let shown = selected.clone();
+    let access = label.to_string();
+    resp.response.widget_info(move || {
+        let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, access.clone());
+        info.current_text_value = Some(shown.clone());
+        info
+    });
+}
+
+fn theme_font_payload(d: &mut Dialog) -> Result<Value, String> {
+    let name = d.get("schemeName", "").trim().to_string();
+    if name.is_empty() {
+        return Err("Enter a scheme name.".into());
+    }
+    let major = d.get("major", "").trim().to_string();
+    if major.is_empty() {
+        return Err("Choose a heading font.".into());
+    }
+    let minor = d.get("minor", "").trim().to_string();
+    if minor.is_empty() {
+        return Err("Choose a body font.".into());
+    }
+    Ok(json!({"name": name, "major": major, "minor": minor}))
+}
+
+/// Create New Theme Fonts. Returns true when the dialog should close.
+fn theme_fonts_dialog(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
+    seed_theme_fonts(d);
+    let major = d.get("major", "Inter");
+    let minor = d.get("minor", "Inter");
+    let headings = theme_font_choices(app, &major);
+    let bodies = theme_font_choices(app, &minor);
+    let mut major = major;
+    let mut minor = minor;
+    ui.horizontal(|ui| {
+        ui.add_sized(vec2(110.0, 18.0), egui::Label::new("Heading:"));
+        font_combo(ui, "Heading font", &headings, &mut major);
+    });
+    ui.horizontal(|ui| {
+        ui.add_sized(vec2(110.0, 18.0), egui::Label::new("Body:"));
+        font_combo(ui, "Body font", &bodies, &mut minor);
+    });
+    d.fields.insert("major".into(), major.clone());
+    d.fields.insert("minor".into(), minor.clone());
+    ui.add_space(4.0);
+    // Theme faces are not egui families; naming an unbound family panics. The lines show the
+    // chosen names at heading and body sizes.
+    ui.label(egui::RichText::new(format!("Heading sample  {major}")).size(20.0));
+    ui.label(egui::RichText::new(format!("Body sample  {minor}")).size(14.0));
+    ui.add_space(4.0);
+    let mut name = d.get("schemeName", "");
+    ui.horizontal(|ui| {
+        ui.add_sized(vec2(110.0, 18.0), egui::Label::new("Name:"));
+        let resp = ui.add(egui::TextEdit::singleline(&mut name).desired_width(240.0).id_salt("schemeName"));
+        let shown = name.clone();
+        resp.widget_info(move || {
+            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Scheme name");
+            info.current_text_value = Some(shown.clone());
+            info
+        });
+    });
+    d.fields.insert("schemeName".into(), name);
+    ui.label(egui::RichText::new("Heading and body fonts for this presentation.").size(11.0).color(Tokens::get(ui.ctx()).text_dim));
+    let (ok, cancel) = buttons(ui, "Save");
+    if ok {
+        match theme_font_payload(d) {
+            Ok(payload) => return app.run("design.fonts", payload).is_ok(),
+            Err(msg) => {
+                app.set_status(msg);
+                return false;
+            }
+        }
+    }
+    cancel
 }
 
 /// Returns true when the dialog should close.
@@ -481,12 +1046,21 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ok || cancel || none
         }
         "altText" => {
-            let cur = app.session.active().and_then(|s| s.selected_shapes().first().map(|x| x.descr.clone())).unwrap_or_default();
+            let (cur, deco_now) = app
+                .session
+                .active()
+                .map(|s| {
+                    let shapes = s.selected_shapes();
+                    let cur = shapes.first().map(|x| x.descr.clone()).unwrap_or_default();
+                    let deco = alt_text_starts_decorative(shapes.iter().map(|x| x.decorative));
+                    (cur, deco)
+                })
+                .unwrap_or_default();
             ui.label(crate::i18n::tr("How would you describe this object and its context to someone who is blind or has low vision?"));
             let mut v = d.get("text", &cur);
             ui.add(egui::TextEdit::multiline(&mut v).desired_rows(4).desired_width(340.0));
             d.fields.insert("text".into(), v.clone());
-            let deco = check(ui, d, "Mark as decorative", "deco", false);
+            let deco = check(ui, d, "Mark as decorative", "deco", deco_now);
             let (ok, cancel) = buttons(ui, "OK");
             if ok {
                 run(app, "shape.altText", json!({"text": v, "decorative": deco}));
@@ -601,6 +1175,52 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 app.export_as(&fmt, extra);
             }
             ok || cancel
+        }
+        "replaceFonts" => {
+            let used: Vec<String> =
+                app.session.execute("font.used", &json!({})).ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+            let mut from = d.get("from", used.first().map(String::as_str).unwrap_or(""));
+            let mut to = d.get("to", "");
+            egui::Grid::new("replace_fonts").num_columns(2).spacing(vec2(10.0, 8.0)).show(ui, |ui| {
+                ui.label("Replace:");
+                egui::ComboBox::from_id_salt("rf_from").width(240.0).selected_text(from.clone()).show_ui(ui, |ui| {
+                    for f in &used {
+                        ui.selectable_value(&mut from, f.clone(), f);
+                    }
+                });
+                ui.end_row();
+                ui.label("With:");
+                ui.vertical(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut to).desired_width(240.0).hint_text("Font name"));
+                    let needle = to.trim().to_lowercase();
+                    egui::ScrollArea::vertical().max_height(140.0).id_salt("rf_list").show(ui, |ui| {
+                        for f in
+                            crate::ribbon::font_families(app).iter().filter(|f| needle.is_empty() || f.to_lowercase().contains(&needle)).take(200)
+                        {
+                            if ui.selectable_label(f.eq_ignore_ascii_case(to.trim()), f).clicked() {
+                                to = f.clone();
+                            }
+                        }
+                    });
+                });
+                ui.end_row();
+            });
+            if let Some(msg) = d.fields.get("result") {
+                ui.label(egui::RichText::new(msg.clone()).color(Tokens::get(ui.ctx()).text_dim));
+            }
+            d.fields.insert("from".into(), from.clone());
+            d.fields.insert("to".into(), to.clone());
+            let (ok, cancel) = buttons(ui, "Replace");
+            if ok && !from.is_empty() && !to.trim().is_empty() {
+                let n = app.run("font.replace", json!({"from": from, "to": to.trim()})).ok().and_then(|v| v["replaced"].as_u64()).unwrap_or(0);
+                let msg =
+                    if n == 0 { format!("“{from}” isn't used explicitly.") } else { format!("Replaced “{from}” with “{}”.", to.trim()) };
+                d.fields.insert("result".into(), msg);
+                d.fields.remove("from");
+                // Stay open, like PowerPoint, so several fonts can be replaced in a row.
+                return cancel;
+            }
+            cancel
         }
         "symbol" => {
             ui.label(crate::i18n::tr("Click a symbol to insert it at the insertion point."));
@@ -920,6 +1540,9 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let (ok, _) = buttons(ui, "Done");
             ok
         }
+        "photoAlbum" => photo_album_dialog(app, ui, d),
+        "themeColors" => theme_colors_dialog(app, ui, d),
+        "themeFonts" => theme_fonts_dialog(app, ui, d),
         _ => {
             ui.label(crate::i18n::format("“{}” is not available yet.", std::slice::from_ref(&d.id)));
             let (ok, cancel) = buttons(ui, "OK");
@@ -1266,3 +1889,29 @@ pub fn paint_logo(p: &egui::Painter, r: Rect) {
 #[cfg(test)]
 #[path = "size_position_tests.rs"]
 mod size_position_tests;
+
+#[cfg(test)]
+#[path = "photo_album_tests.rs"]
+mod photo_album_tests;
+
+#[cfg(test)]
+#[path = "theme_colors_tests.rs"]
+mod theme_colors_tests;
+
+#[cfg(test)]
+#[path = "theme_fonts_tests.rs"]
+mod theme_fonts_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::alt_text_starts_decorative;
+
+    #[test]
+    fn decorative_starts_checked_only_when_every_shape_is() {
+        assert!(!alt_text_starts_decorative([]));
+        assert!(!alt_text_starts_decorative([false]));
+        assert!(alt_text_starts_decorative([true]));
+        assert!(alt_text_starts_decorative([true, true]));
+        assert!(!alt_text_starts_decorative([true, false]));
+    }
+}

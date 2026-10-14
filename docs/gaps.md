@@ -12,6 +12,12 @@
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (chart trendlines round-trip; previous: minor, 3-D bevel, camera and face lighting rendered; IME composition and CJK interface text landed, #101; core-workflow alpha gate added; stage stays alpha; full re-measure against PowerPoint for Mac 16.113.4 and the open GitHub issues) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Insert › Icons places a Lucide stroke set; 3-D models and stock content remain; previous: minor, 3-D bevel, camera and face lighting rendered) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Size and Position dialog; previous: minor, 3-D bevel, camera and face lighting) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (six original starter decks on File › New; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (IME composition in a table cell is underlined; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** trivial (Photo Album is one of 28 dialogs; Font, Bullets, Find, Replace Fonts, Action Settings, Print and Insert Object remain; previous: minor, 3-D bevel, camera and face lighting) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** trivial (Edit Photo Album reuses the Photo Album dialog, still 28; Font, Bullets, Find, Replace Fonts, Action Settings, Print and Insert Object remain; previous: trivial, Photo Album counted) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Create New Theme Colors; dialogs 27 → 28; previous: 3-D bevel, camera and face lighting) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Create New Theme Fonts; dialogs 27 → 28; previous: 3-D bevel, camera and face lighting) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 
 Every known shortfall, one entry each, ranked by how much it stops someone who presents with
 PowerPoint from switching. This is the work list: pick from the top. Numbers are summarized in
@@ -39,7 +45,7 @@ revision history.
 | 7 | Fonts: only Regular, Bold and Italic faces (#69) | Feature | B | 3–5 | [ui-parity.md](ui-parity.md) |
 | 8 | Image paste fails on Windows and Linux (#53) | Feature | B | 2–4 | [ui-parity.md](ui-parity.md) |
 | 9 | Presenter view isn't placed on the second display | Hardware | B | 3–5 | [slideshow-parity.md](slideshow-parity.md) |
-| 10 | Animation Pane: no timeline, thin preview; 64 of ~190 effects | Feature | B (pane) | 10–16 | [animation-parity.md](animation-parity.md) |
+| 10 | Animation Pane: thin preview (timeline done); 64 of ~190 effects | Feature | B (pane) | 8–14 | [animation-parity.md](animation-parity.md) |
 | 11 | Charts: data grid editing, elements, `chartex` types | Feature | B (data, elements) | 12–20 | [parity-checklist.md](parity-checklist.md) |
 | 12 | Format Shape pane thinner than PowerPoint's | UI/UX | B | 6–10 | [ui-parity.md](ui-parity.md) |
 | 13 | No native macOS menu bar | UI/UX | B | 3–5 | [ui-parity.md](ui-parity.md) |
@@ -294,6 +300,20 @@ Detail in [ui-parity.md](ui-parity.md).
   Replace Fonts, Action Settings, Print, Insert Object…). 8–14 h.
 - **Dialogs**: 28 dialogs vs PowerPoint's ~60 (Font, Bullets and Numbering, Find/Replace dialog,
   Replace Fonts, Action Settings, Print, Insert Object…). Size and Position is one of the 28. 8–14 h.
+- **Dialogs**: 28 dialogs vs PowerPoint's ~60 (Photo Album is one of them). Still missing Font,
+- **Dialogs**: 28 dialogs vs PowerPoint's ~60 (Photo Album is one of them; Edit Photo Album reopens it). Still missing Font,
+  Bullets and Numbering, Find/Replace, Replace Fonts, Action Settings, Print, Insert Object…. 8–14 h.
+- **Dialogs**: 28 dialogs vs PowerPoint's ~60. Create New Theme Colors (Design › Colors ›
+  Customize Colors…) edits the open master's twelve theme colours, not a saved library of named
+  schemes. Still missing: Font, Bullets and Numbering, Find/Replace dialog, Replace Fonts, Action
+  Settings, Print, Insert Object. 8–14 h.
+- **Dialogs**: 28 dialogs vs PowerPoint's ~60. Create New Theme Fonts (Design › Fonts ›
+  Customize Fonts…) edits the open master's heading and body latin faces and the scheme name.
+  It is not a saved library of theme fonts, and it does not pick East Asian or complex-script
+  faces. Still missing: Font, Bullets and Numbering, Find/Replace dialog, Replace Fonts, Action
+  Settings, Print, Insert Object. 8–14 h.
+- **Dialogs**: 28 dialogs vs PowerPoint's ~60 (Font, Bullets and Numbering, Find/Replace dialog,
+  Action Settings, Print, Insert Object…). 8–14 h.
 - **Command palette defaults to an Export entry that fails** (#79). 0.5 h.
 
 ## Hardware
@@ -316,7 +336,6 @@ Detail in [localization-parity.md](localization-parity.md).
   (Noto CJK is excluded by the asset policy), so the web build draws Korean file names, notes and
   outline text as boxes; desktop borrows Malgun Gothic, Apple SD Gothic Neo or Noto Sans CJK.
   Adding an openly licensed Korean face (e.g. Nanum Gothic, OFL) to craft-fonts: 1–2 h.
-- **Table cells don't underline an IME composition** (the text is composed in place, #101). 1 h.
 - **Target languages beyond English missing.** English and Ukrainian now have a UI catalog and
   system-language selection (#15, #30). PowerPoint for Mac ships 26 languages. Additional
   translations need 3–16 h per language plus native review. Beta needs at least Simplified
@@ -334,8 +353,11 @@ Detail in [localization-parity.md](localization-parity.md).
 
 ## Ecosystem
 
-- **8 original themes, no template gallery.** PowerPoint offers dozens of designs online and
-  offline. 8–14 h for a larger original set (asset policy: our own designs only).
+- **Six original starter decks; PowerPoint's large template gallery remains.** File › New and the
+  start screen offer Briefing, Lesson, Pitch, Field Notes, Quarterly and Evening Talk
+  (`file.new {template}`), each a few slides on one of our themes. Dozens of further offline
+  designs, and any online gallery, are still absent. 4–8 h for a larger original set (asset policy:
+  our own designs only).
 - **No add-ins or VBA.** Out of scope by policy; MCP/CLI automation is the alternative.
 
 ## AI features
@@ -365,6 +387,12 @@ Detail in [localization-parity.md](localization-parity.md).
 | 2026-10-14 | trivial | 3-D extrusions draw their sides under turned cameras |
 | 2026-10-14 | minor | Insert › Icons places Lucide 1.56.0 stroke icons as custom shapes. The checklist row stays missing until 3-D models and stock content exist |
 | 2026-10-14 | minor | Size and Position dialog landed (position, size, rotation, scale, lock aspect, one undo). The dialog gap remains Font, Bullets and Numbering, Find/Replace, Replace Fonts, Action Settings, Print, Insert Object and the rest of the ~60 |
+| 2026-10-14 | minor | File › New has six original starter decks; a large template gallery is still open |
+| 2026-10-14 | minor | An IME composition in a table cell is underlined in place, and the caret and candidate window sit in that cell |
+| 2026-10-14 | trivial | Photo Album dialog counted (28 vs ~60). Font, Bullets, Find, Replace Fonts, Action Settings, Print and Insert Object remain |
+| 2026-10-14 | trivial | Edit Photo Album reuses the Photo Album dialog (still 28 vs ~60). Font, Bullets, Find, Replace Fonts, Action Settings, Print and Insert Object remain |
+| 2026-10-14 | minor | Create New Theme Colors is in (dialogs 27 → 28). Font, Bullets and Numbering, Find/Replace, Replace Fonts, Action Settings, Print and Insert Object stay open |
+| 2026-10-14 | minor | Create New Theme Fonts is in (dialogs 27 → 28): heading and body latin on the open master. Font, Bullets and Numbering, Find/Replace, Replace Fonts, Action Settings, Print and Insert Object stay open |
 | 2026-10-13 | minor | Shape, picture and table rendering checked against PowerPoint on ~150 synthetic edge-case slides; 3-D bevels, cameras and face lighting now render approximately (gap narrowed to extrusion, rigs and the 3-D pane) |
 | 2026-10-13 | minor | Interactive decks: triggers, return-to-slide state and click rules landed in the slide show; the remaining pieces are one new entry under Features |
 | 2026-10-12 | minor | IME composition in slide text and notes, and CJK interface text with real glyphs (#101): the IME gap is now Korean on the web and table-cell underlines |
