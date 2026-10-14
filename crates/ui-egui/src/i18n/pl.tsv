@@ -58,6 +58,7 @@ Add Font	Dodaj czcionkę
 Add Point	Dodaj punkt
 Add Section	Dodaj sekcję
 Add Shape	Dodaj kształt
+Add to Quick Access Toolbar	Dodaj do paska narzędzi Szybki dostęp
 Add\nAnimation	Dodaj\nanimację
 Address:	Adres:
 Adjust Shape	Dostosuj kształt
@@ -1308,6 +1309,7 @@ Print…	Drukuj…
 Counterclockwise	Przeciwnie do ruchu wskazówek zegara
 Crescent Moon	Półksiężyc
 Curved Square	Zaokrąglony kwadrat
+Customize Quick Access Toolbar	Dostosuj pasek narzędzi Szybki dostęp
 Decaying Wave	Fala gasnąca
 Delete Point	Usuń punkt
 Demote	Obniż poziom
@@ -1323,6 +1325,7 @@ Edit Photo Album…	Edytuj album fotograficzny…
 Edit Points	Edytuj punkty
 Edit SmartArt Text	Edytuj tekst grafiki SmartArt
 Enter a zoom percent	Wpisz procent powiększenia
+Find	Znajdź
 Fonts in Presentation	Czcionki w prezentacji
 Football	Piłka owalna
 From Bottom-Left	Od lewego dolnego rogu
@@ -1347,6 +1350,7 @@ Loop de Loop	Pętla w pętli
 Move Handle	Przesuń uchwyt
 Move Point	Przesuń punkt
 Neutron	Neutron
+New	Nowy
 New Window	Nowe okno
 Next Comment	Następny komentarz
 No comments.	Brak komentarzy.
@@ -1354,6 +1358,7 @@ No icons match.	Brak pasujących ikon.
 No Recolor	Bez zmiany koloru
 Notes Placeholders	Symbole zastępcze notatek
 Office Theme	Motyw pakietu Office
+Open	Otwórz
 Out with Bounce	Na zewnątrz z odbiciem
 Particles In	Cząsteczki do środka
 Particles Out	Cząsteczki na zewnątrz
@@ -1370,11 +1375,15 @@ Points	Punkty
 Preserve	Zachowaj
 Previous Comment	Poprzedni komentarz
 Promote	Podwyższ poziom
+Quick Access Toolbar	Pasek narzędzi Szybki dostęp
 Recolor	Zmień kolor
 Recolor Gallery	Galeria zmiany koloru
+Remove from Quick Access Toolbar	Usuń z paska narzędzi Szybki dostęp
 Remove Shape	Usuń kształt
 Replace Fonts	Zamień czcionki
 Rescan Installed Fonts	Wyszukaj ponownie zainstalowane czcionki
+Reset to Defaults	Przywróć domyślne
+Right-click any ribbon button to add it.	Kliknij prawym przyciskiem dowolny przycisk wstążki, aby go dodać.
 S Curve 1	Krzywa S 1
 S Curve 2	Krzywa S 2
 Sepia	Sepia
@@ -1392,6 +1401,7 @@ Spiral Left	Spirala w lewo
 Spiral Right	Spirala w prawo
 Spring	Sprężyna
 Stairs Down	Schody w dół
+Start from Beginning	Od początku
 Starter Templates	Szablony startowe
 Strips In	Paski do środka
 Strips Out	Paski na zewnątrz

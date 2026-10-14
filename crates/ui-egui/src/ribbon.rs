@@ -12,7 +12,34 @@ use crate::widgets::{self, RIBBON_H, big_button, big_button_ex, color_split, dro
 
 pub const TITLE_H: f32 = 38.0;
 
+/// macOS draws the window into the title bar (`with_fullsize_content_view`) and AppKit paints the
+/// traffic lights itself, 16 pt from the top of the window on macOS 27. Moving them would take
+/// AppKit calls (`unsafe`, forbidden here), so on macOS the title bar is the band they are centred
+/// in, with the controls beside them (#71). Up to macOS 15 the lights are smaller and centred 14 pt
+/// from the top, about 2 pt above this bar's centre.
+pub const MAC_TITLE_BAR: f32 = 32.0;
+/// The traffic lights as AppKit lays them out, measured on macOS 27: button diameter,
+/// centre-to-centre pitch and the first button's left edge.
+const MAC_LIGHT: f32 = 14.0;
+const MAC_LIGHT_PITCH: f32 = 23.0;
+const MAC_LIGHTS_LEFT: f32 = 9.0;
+/// Where title-bar content starts on macOS: the end of the three lights plus the gap the lights
+/// keep from the top of the window.
+pub const MAC_CONTENT_LEFT: f32 = MAC_LIGHTS_LEFT + 2.0 * MAC_LIGHT_PITCH + MAC_LIGHT + (MAC_TITLE_BAR - MAC_LIGHT) / 2.0;
+
+/// The title bar's height, the left edge of its content and the height of its tallest control.
+/// With the integrated title bar (macOS) the bar is shorter, so the controls shrink to keep a
+/// margin above and below them.
+fn title_geometry(integrated: bool) -> (f32, f32, f32) {
+    if integrated { (MAC_TITLE_BAR, MAC_CONTENT_LEFT, 22.0) } else { (TITLE_H, 10.0, 26.0) }
+}
+
 /// Is engine command `id` enabled right now?
+/// Whether `id` names an engine or UI command.
+pub fn known(id: &str) -> bool {
+    deckcraft_engine::find_command(id).is_some() || crate::UI_COMMANDS.iter().any(|c| c.0 == id)
+}
+
 pub fn enabled(app: &SlideApp, id: &str) -> bool {
     match deckcraft_engine::find_command(id) {
         Some(c) => (c.enabled)(&app.session).is_ok(),
@@ -27,7 +54,8 @@ fn run(app: &mut SlideApp, id: &str, p: Value) {
 /// The window's title row: traffic-light space, quick access, centred title, actions.
 pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    egui::Panel::top("title_bar").exact_size(TITLE_H).frame(egui::Frame::NONE.fill(t.chrome)).show(ui, |ui| {
+    let (height, left, control_h) = title_geometry(app.integrated_titlebar);
+    egui::Panel::top("title_bar").exact_size(height).frame(egui::Frame::NONE.fill(t.chrome)).show(ui, |ui| {
         let rect = ui.max_rect();
         // Dragging the empty title bar moves the window.
         let drag = ui.interact(rect, ui.id().with("titledrag"), Sense::click_and_drag());
@@ -38,7 +66,6 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
             let max = ui.input(|i| i.viewport().maximized.unwrap_or(false));
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
         }
-        let left = if app.integrated_titlebar { 84.0 } else { 10.0 };
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(Rect::from_min_max(pos2(rect.min.x + left, rect.min.y), pos2(rect.min.x + 420.0, rect.max.y)))
@@ -47,24 +74,7 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
         child.spacing_mut().item_spacing.x = 2.0;
         let has_doc = app.session.active().is_some();
         let dirty = app.session.active().is_some_and(|d| d.is_dirty());
-        if icon_toggle(&mut child, Icon::Home, "Home", true, app.backstage_open()).clicked() {
-            let _ = app.run("app.home", json!({}));
-        }
-        if icon_toggle(&mut child, Icon::Save, "Save (⌘S)", has_doc, false).clicked() {
-            app.save();
-        }
-        if icon_toggle(&mut child, Icon::Export, "Export…", has_doc, false).clicked() {
-            let _ = app.run("app.exportDialog", json!({}));
-        }
-        if icon_toggle(&mut child, Icon::Undo, "Undo (⌘Z)", enabled(app, "edit.undo"), false).clicked() {
-            run(app, "edit.undo", json!({}));
-        }
-        if icon_toggle(&mut child, Icon::Redo, "Redo (⌘Y)", enabled(app, "edit.redo"), false).clicked() {
-            run(app, "edit.redo", json!({}));
-        }
-        if icon_toggle(&mut child, Icon::PlayFromStart, "Play from Start (F5)", has_doc, false).clicked() {
-            app.start_show(app.show_start_index(), false);
-        }
+        crate::qat::show(app, &mut child);
         let title = app
             .session
             .active()
@@ -84,8 +94,8 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
         let share = right.add(
             egui::Button::new(egui::RichText::new(crate::i18n::tr("  Present  ")).color(t.accent_text).font(theme::bold(13.0)))
                 .fill(t.accent)
-                .corner_radius(CornerRadius::same(13))
-                .min_size(vec2(84.0, 26.0)),
+                .corner_radius(control_h / 2.0)
+                .min_size(vec2(84.0, control_h)),
         );
         if share.clicked() && has_doc {
             let from = app.session.active().map(|d| d.selection.slide).unwrap_or(0);
@@ -250,14 +260,16 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
 
 fn big(app: &mut SlideApp, ui: &mut Ui, icon: Icon, label: &str, id: &str, p: Value) {
     let en = enabled(app, id);
-    let resp = big_button(ui, icon, label, en);
+    let r = big_button(ui, icon, label, en);
     if id == "insert.dateTime" {
         let name = label.replace('\n', " ");
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, en, &name));
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, en, &name));
     }
-    if resp.on_hover_text(tip(id, label)).clicked() {
-        run(app, id, p);
+    let r = r.on_hover_text(tip(id, label));
+    if r.clicked() {
+        run(app, id, p.clone());
     }
+    crate::qat::ribbon_menu(app, &r, icon, label, id, &p);
 }
 
 /// Photo Album is a split button: the main click starts a new album, the arrow edits one.
@@ -283,9 +295,11 @@ fn photo_album_button(app: &mut SlideApp, ui: &mut Ui) {
 
 fn small(app: &mut SlideApp, ui: &mut Ui, icon: Icon, label: &str, id: &str, p: Value) {
     let en = enabled(app, id);
-    if small_button(ui, icon, label, en, false).on_hover_text(tip(id, label)).clicked() {
-        run(app, id, p);
+    let r = small_button(ui, icon, label, en, false).on_hover_text(tip(id, label));
+    if r.clicked() {
+        run(app, id, p.clone());
     }
+    crate::qat::ribbon_menu(app, &r, icon, label, id, &p);
 }
 
 fn toggle(app: &mut SlideApp, ui: &mut Ui, icon: Icon, label: &str, id: &str, on: bool) {
@@ -1211,8 +1225,13 @@ fn insert(app: &mut SlideApp, ui: &mut Ui) {
         big(app, ui, Icon::SmartArt, "SmartArt", "app.dialog", json!({"id": "smartart"}));
         let r = big_button(ui, Icon::Chart, "Chart", enabled(app, "insert.chart"));
         egui::Popup::menu(&r).show(|ui| {
-            for k in deckcraft_model::chart::ChartType::MAIN {
-                if ui.button(crate::i18n::tr(k.label())).clicked() {
+            for k in chart_menu_types() {
+                if k.is_none() {
+                    ui.separator();
+                }
+                if let Some(k) = k
+                    && ui.button(crate::i18n::tr(k.label())).clicked()
+                {
                     run(app, "insert.chart", json!({"type": format!("{k:?}")}));
                 }
             }
@@ -2958,7 +2977,11 @@ fn chart_design(app: &mut SlideApp, ui: &mut Ui) {
     group(ui, |ui| {
         let r = big_button(ui, Icon::ChangeChartType, "Change\nChart Type", true);
         egui::Popup::menu(&r).show(|ui| {
-            for k in deckcraft_model::chart::ChartType::MAIN {
+            for k in chart_menu_types() {
+                let Some(k) = k else {
+                    ui.separator();
+                    continue;
+                };
                 if ui.button(crate::i18n::tr(k.label())).clicked() {
                     // Replace the chart's type keeping its data.
                     if let Some(id) = app.session.active().and_then(|d| d.selection.shapes.first().copied()) {
@@ -3269,6 +3292,16 @@ fn paint_freeform_icon(p: &egui::Painter, r: Rect, name: &str, ink: Color32) {
     p.add(egui::Shape::line(pts, egui::Stroke::new(1.3, ink)));
 }
 
+/// The chart types in the Insert Chart and Change Chart Type menus: the main ones, a separator
+/// (`None`), then the Office 2016 types not already listed.
+fn chart_menu_types() -> Vec<Option<deckcraft_model::chart::ChartType>> {
+    use deckcraft_model::chart::ChartType;
+    let mut v: Vec<Option<ChartType>> = ChartType::MAIN.iter().copied().map(Some).collect();
+    v.push(None);
+    v.extend(ChartType::OFFICE_2016.iter().copied().filter(|k| !ChartType::MAIN.contains(k)).map(Some));
+    v
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3310,3 +3343,22 @@ mod effects_tests;
 #[cfg(test)]
 #[path = "master_layout_tests.rs"]
 mod master_layout_tests;
+
+#[cfg(test)]
+mod title_bar_tests {
+    use super::*;
+
+    #[test]
+    fn mac_title_bar_centres_and_clears_the_traffic_lights() {
+        let (h, left, control) = title_geometry(true);
+        // AppKit centres the lights in its own band, so the bar is that band.
+        assert_eq!(h, MAC_TITLE_BAR);
+        // Content keeps the same gap after the lights as the lights keep from the top.
+        let lights_end = MAC_LIGHTS_LEFT + 2.0 * MAC_LIGHT_PITCH + MAC_LIGHT;
+        assert_eq!(left - lights_end, (h - MAC_LIGHT) / 2.0);
+        // The tallest controls keep at least 4 pt above and below.
+        assert!(control <= h - 8.0);
+        // Other platforms keep their system frame and the original bar.
+        assert_eq!(title_geometry(false), (TITLE_H, 10.0, 26.0));
+    }
+}

@@ -223,6 +223,7 @@ mod tests {
             include_str!("media.rs"),
             include_str!("menus.rs"),
             include_str!("panes.rs"),
+            include_str!("qat.rs"),
             include_str!("ribbon.rs"),
             include_str!("show.rs"),
             include_str!("sorter.rs"),

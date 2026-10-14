@@ -57,6 +57,7 @@ Add Font	Додати шрифт
 Add Point	Додати точку
 Add Section	Додати розділ
 Add Shape	Додати фігуру
+Add to Quick Access Toolbar	Додати до панелі швидкого доступу
 Add\nAnimation	Додати анімацію
 Address:	Адреса:
 Adjust Shape	Змінити фігуру
@@ -1307,6 +1308,7 @@ Print…	Друк…
 Counterclockwise	Проти годинникової стрілки
 Crescent Moon	Півмісяць
 Curved Square	Заокруглений квадрат
+Customize Quick Access Toolbar	Налаштувати панель швидкого доступу
 Decaying Wave	Затухаюча хвиля
 Delete Point	Видалити точку
 Demote	Понизити рівень
@@ -1322,6 +1324,7 @@ Edit Photo Album…	Змінити фотоальбом…
 Edit Points	Змінити точки
 Edit SmartArt Text	Змінити текст SmartArt
 Enter a zoom percent	Введіть відсоток масштабу
+Find	Знайти
 Fonts in Presentation	Шрифти в презентації
 Football	Овальний м'яч
 From Bottom-Left	Із нижнього лівого кута
@@ -1346,6 +1349,7 @@ Loop de Loop	Петля в петлі
 Move Handle	Перемістити маркер
 Move Point	Перемістити точку
 Neutron	Нейтрон
+New	Створити
 New Window	Нове вікно
 Next Comment	Наступний коментар
 No comments.	Немає коментарів.
@@ -1353,6 +1357,7 @@ No icons match.	Немає відповідних піктограм.
 No Recolor	Без перефарбування
 Notes Placeholders	Заповнювачі нотаток
 Office Theme	Тема Office
+Open	Відкрити
 Out with Bounce	Назовні з відскоком
 Particles In	Частинки всередину
 Particles Out	Частинки назовні
@@ -1369,11 +1374,15 @@ Points	Точки
 Preserve	Зберегти
 Previous Comment	Попередній коментар
 Promote	Підвищити рівень
+Quick Access Toolbar	Панель швидкого доступу
 Recolor	Перефарбувати
 Recolor Gallery	Колекція перефарбування
+Remove from Quick Access Toolbar	Видалити з панелі швидкого доступу
 Remove Shape	Видалити фігуру
 Replace Fonts	Замінити шрифти
 Rescan Installed Fonts	Повторно знайти встановлені шрифти
+Reset to Defaults	Відновити стандартні
+Right-click any ribbon button to add it.	Клацніть правою кнопкою будь-яку кнопку стрічки, щоб додати її.
 S Curve 1	S-крива 1
 S Curve 2	S-крива 2
 Sepia	Сепія
@@ -1391,6 +1400,7 @@ Spiral Left	Спіраль ліворуч
 Spiral Right	Спіраль праворуч
 Spring	Пружина
 Stairs Down	Сходи вниз
+Start from Beginning	З початку
 Starter Templates	Початкові шаблони
 Strips In	Смуги всередину
 Strips Out	Смуги назовні
