@@ -34,6 +34,7 @@
 > **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (Grid Options dialog; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (WordArt adjust handles drag; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (pen pressure scales ink width; tilt, pinch and trackpad gestures remain; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** trivial (unchanged chart workbooks round-trip, #335; previous: minor, 3-D bevel, camera and face lighting rendered; previous: minor, IME composition and CJK interface text landed, #101; previous: minor, core-workflow alpha gate added; stage stays alpha; before that: major, first itemized gap list; full re-measure against PowerPoint for Mac 16.113.4 and the open GitHub issues) · **Target**:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 
 Every known shortfall, one entry each, ranked by how much it stops someone who presents with
 PowerPoint from switching. This is the work list: pick from the top. Numbers are summarized in
@@ -225,11 +226,6 @@ Detail in [file-format-parity.md](file-format-parity.md).
 - **Impact:** copy-paste of screenshots is a core workflow.
 - **Estimate:** 2–4 h. **Beta blocker.**
 
-### Tab inside a text box ends text entry (#78)
-- **Evidence:** #78.
-- **Impact:** tab stops and indented lists can't be typed.
-- **Estimate:** 1–2 h.
-
 ### Charts: data grid, elements and the newer chart types
 - **Evidence:** checklist rows "Edit chart data" (P0, partial), "Chart elements" (partial), "Other
   chart types" (partial); `chartex` parts (waterfall, funnel, treemap, sunburst, histogram, Pareto,
@@ -246,6 +242,8 @@ Detail in [file-format-parity.md](file-format-parity.md).
   moving average, with forecast and the equation and R² label. A moving average is drawn with
   neither label. A combo chart's secondary value axis is read (`y2_*`,
   `Series.secondary_axis`) and is not written back when the chart is rebuilt.
+  An unchanged chart's embedded workbook now survives save (#335); editing the chart still
+  drops it rather than writing a stale spreadsheet.
 - **Impact:** most business decks have charts; editing their data is routine.
 - **Estimate:** 12–20 h. Data and elements are **beta blockers** (6–10 h).
 
@@ -353,6 +351,7 @@ Zoom (summary/section/slide, 6–10 h), reuse slides (2–4 h), laser pointer (1
 sounds (1–2 h), artistic effects (6–10 h), compress pictures (2–3 h), insert screenshot (2–3 h), record audio/screen and record slide
 sounds (1–2 h), artistic effects (3–6 h for the other 15 of 22; 7 approximated and round-tripped), remove background (6–10 h; needs a model or a classical
 Zoom (summary/section/slide, 6–10 h), reuse slides (2–4 h), transition
+Zoom: live thumbnails, the zoom-in animation and the native `p166:sldZm` element (3–5 h; `insert.zoom` makes linked pictures with Return to Zoom), reuse slides (2–4 h), laser pointer (1–2 h), transition
 sounds (1–2 h), artistic effects (6–10 h), remove background (6–10 h; needs a model or a classical
 matte), compress pictures (2–3 h), insert screenshot (2–3 h), record audio/screen and record slide
 show (8–12 h), compare presentations (6–10 h), password protection (4–6 h, ECMA-376 agile
@@ -360,6 +359,13 @@ encryption), ink to shape/text (6–10 h), 3-D models and stock content (6–10 
 show (8–12 h), compare presentations beyond slide-level accept (reject, per-object accept,
 markers on the slide: 3–5 h), password protection (4–6 h, ECMA-376 agile
 encryption), ink to shape/text (6–10 h), icons and 3-D models (8–14 h, needs an open icon set).
+Zoom (summary/section/slide, 6–10 h), reuse slides pane with thumbnails (1–2 h; `slide.reuse`
+inserts from a file), laser pointer (1–2 h), transition sounds (1–2 h), artistic effects (3–6 h
+for the other 15 of 22; 7 approximated and round-tripped), remove background (6–10 h; needs a
+model or a classical matte), insert screenshot (2–3 h), record audio/screen and record slide show
+(8–12 h), compare presentations beyond slide-level accept (reject, per-object accept, markers on
+the slide: 3–5 h), password protection (4–6 h, ECMA-376 agile encryption), ink to shape/text
+(6–10 h), 3-D models and stock content (6–10 h; Insert › Icons places a Lucide stroke set).
 
 ## UI/UX
 
@@ -515,11 +521,13 @@ Detail in [localization-parity.md](localization-parity.md).
 | 2026-10-13 | minor | Grid Options dialog sets spacing, snap and whether gridlines and guides show; the on-screen grid follows that spacing |
 | 2026-10-13 | minor | WordArt adjust handles: a selected text warp shows one yellow handle per adjust, and dragging it sets that guide value (gallery and command still open) |
 | 2026-10-14 | minor | Pen pressure scales ink width when the pointer reports it; tilt, pinch-zoom and other trackpad gestures remain |
+| 2026-10-13 | trivial | Chart workbook round-trip (#335) noted under the charts gap; editing chart data is still open |
 | 2026-10-13 | minor | Shape, picture and table rendering checked against PowerPoint on ~150 synthetic edge-case slides; 3-D bevels, cameras and face lighting now render approximately (gap narrowed to extrusion, rigs and the 3-D pane) |
 | 2026-10-13 | minor | Interactive decks: triggers, return-to-slide state and click rules landed in the slide show; the remaining pieces are one new entry under Features |
 | 2026-10-12 | minor | IME composition in slide text and notes, and CJK interface text with real glyphs (#101): the IME gap is now Korean on the web and table-cell underlines |
 | 2026-10-12 | minor | EMF/WMF text, pattern and hatch brushes drawn; legacy OLE and ActiveX previews shown; the SVG gap keeps only EMF clip regions |
 | 2026-10-12 | minor | Text warps render (all 40 presets, adjusts round-trip); the warp gap is now the gallery, command and handles |
+| 2026-10-11 | minor | Removed "Tab inside a text box ends text entry" (#78, fixed) |
 | 2026-10-11 | minor | Animated GIF export landed (#171); the entry now covers video export and animating transitions in the GIF |
 | 2026-10-10 | minor | Narrowed localization gap: Ukrainian UI catalog and language selection exist; other target languages, IME and RTL UI remain |
 | 2026-10-10 | minor | Noted that no gap blocks alpha (core-workflow gate passes) |

@@ -404,6 +404,34 @@ fn horizontal_bars_list_the_first_category_at_the_bottom_unless_reversed() {
 }
 
 #[test]
+fn glow_of_an_unfilled_shape_follows_its_line() {
+    // A frame (no fill, thin line) with a strong glow: the glow lines its edge, the inside stays
+    // the slide's white, as PowerPoint draws it.
+    let glow = |fill: Option<Fill>| {
+        let mut sh = Shape {
+            id: ShapeId(610),
+            xfrm: Some(Xfrm::new(100.0, 100.0, 400.0, 300.0)),
+            fill,
+            line: Some(deckcraft_model::style::Line::solid(ColorRef::rgb(deckcraft_color::Rgba::rgb(0, 176, 240)), 0.25)),
+            ..Default::default()
+        };
+        sh.effects = Some(deckcraft_model::Effects {
+            glow: Some(deckcraft_model::style::Glow { color: ColorRef::rgb(deckcraft_color::Rgba::rgb(0, 0, 255)), radius: 8.0 }),
+            ..Default::default()
+        });
+        render_slide(&deck_with(vec![sh]), 0, &RenderOpts { scale: 1.0, ..Default::default() })
+    };
+    let img = glow(Some(Fill::None));
+    let inside = img.pixel(300, 250);
+    assert!(inside[0] > 245 && inside[1] > 245, "{inside:?}");
+    let edge = img.pixel(300, 97);
+    assert!(edge[0] < 230, "{edge:?}");
+    // A filled shape's glow is still the whole silhouette's (the fill covers its inside).
+    let img = glow(Some(Fill::solid(ColorRef::rgb(deckcraft_color::Rgba::rgb(255, 255, 255)))));
+    assert!(img.pixel(300, 94)[0] < 240);
+}
+
+#[test]
 fn placeholder_prompts_only_in_edit_view() {
     let p = Presentation::default();
     let edit = render_slide(&p, 0, &RenderOpts { scale: 0.5, edit: true, ..Default::default() });
@@ -716,6 +744,29 @@ fn morph_path_fades_a_fill_only_one_side_has() {
 }
 
 #[test]
+fn morph_path_aligns_once_per_transition() {
+    let (from, to) = (Xfrm::new(0.0, 0.0, 200.0, 200.0), Xfrm::new(0.0, 0.0, 300.0, 150.0));
+    let star = Shape { geom: Geom::preset("star5"), ..Default::default() };
+    let pm = |t: f64| PathMorph { id: ShapeId(10), from: Geom::preset("ellipse"), from_box: from, to_box: to, t };
+    let els = |(g, f): (deckcraft_geom::preset::Geometry, Vec<_>)| (g.paths.iter().map(|p| p.path.elements().to_vec()).collect::<Vec<_>>(), f);
+    let mut cache = morph_path::Cache::default();
+    for t in [0.0, 0.3, 0.7, 1.0] {
+        let got = els(cache.geometry(&pm(t), &star, 250.0, 175.0));
+        // The same as aligning afresh.
+        assert_eq!(got, els(morph_path::Cache::default().geometry(&pm(t), &star, 250.0, 175.0)));
+        cache.sweep();
+    }
+    assert_eq!(cache.len(), 1);
+    // Another target outline is another morph.
+    let _ = cache.geometry(&pm(0.5), &Shape { geom: Geom::preset("rect"), ..Default::default() }, 250.0, 175.0);
+    assert_eq!(cache.len(), 2);
+    // A frame without morphs ends the transition: the cache empties.
+    cache.sweep();
+    cache.sweep();
+    assert_eq!(cache.len(), 0);
+}
+
+#[test]
 fn text_transform_unmirrors_flips() {
     // Asymmetric text rect in a 100×50 box: flips move the rect, never mirror the text.
     let tr = Rect::new(10.0, 0.0, 40.0, 50.0);
@@ -812,6 +863,7 @@ fn hyperlinks_draw_in_the_hyperlink_colour_underlined() {
         highlight_click: false,
         sound: None,
         stop_sound: false,
+        zoom_return: None,
     });
     let hlink = Some(Fill::solid(ColorRef::scheme(deckcraft_color::SchemeSlot::Hlink)));
     let red = Some(Fill::solid(ColorRef::rgb(Rgba::rgb(200, 0, 0))));
@@ -1494,7 +1546,7 @@ fn an_object_deckcraft_doesnt_model_shows_its_preview_picture() {
         let sh = Shape {
             id: ShapeId(600),
             xfrm: Some(Xfrm::new(100.0, 100.0, 400.0, 200.0)),
-            kind: ShapeKind::Opaque { xml: String::new(), preview: with_preview.then_some(media), label: "Package".into() },
+            kind: ShapeKind::Opaque { xml: String::new(), preview: with_preview.then_some(media), label: "Package".into(), parts: vec![] },
             ..Default::default()
         };
         std::sync::Arc::make_mut(&mut p.slides[0]).shapes = vec![sh];
@@ -2010,7 +2062,8 @@ fn east_asian_vertical_text_stands_ideographs_upright() {
 #[test]
 fn placed_shapes_give_the_click_boxes_of_a_slide_in_drawing_order() {
     use deckcraft_model::text::{Action, Hyperlink};
-    let link = Hyperlink { action: Action::NextSlide, tooltip: String::new(), highlight_click: false, sound: None, stop_sound: false };
+    let link =
+        Hyperlink { action: Action::NextSlide, tooltip: String::new(), highlight_click: false, sound: None, stop_sound: false, zoom_return: None };
     let rect = |id: u32, x: f64, click: Option<Hyperlink>| Shape {
         id: ShapeId(id),
         xfrm: Some(Xfrm::new(x, 50.0, 100.0, 40.0)),
@@ -2050,7 +2103,14 @@ fn a_text_hyperlink_belongs_to_the_shape_that_holds_the_text() {
     use deckcraft_model::text::{Action, Hyperlink};
     let mut body = TextBody::from_text("click here");
     for r in &mut body.paragraphs[0].runs {
-        r.props.link = Some(Hyperlink { action: Action::FirstSlide, tooltip: String::new(), highlight_click: false, sound: None, stop_sound: false });
+        r.props.link = Some(Hyperlink {
+            action: Action::FirstSlide,
+            tooltip: String::new(),
+            highlight_click: false,
+            sound: None,
+            stop_sound: false,
+            zoom_return: None,
+        });
     }
     let sh = Shape { id: ShapeId(7), xfrm: Some(Xfrm::new(100.0, 100.0, 300.0, 60.0)), text: Some(body), ..Default::default() };
     let placed = place_slide(&deck_with(vec![sh]), 0);
@@ -2457,4 +2517,17 @@ fn render_an_emf_file_to_look_at() {
     std::sync::Arc::make_mut(&mut p.slides[0]).shapes = vec![sh];
     let img = render_slide(&p, 0, &RenderOpts { scale: 1.0, ..Default::default() });
     let _ = std::fs::write(out, img.to_png());
+}
+
+#[test]
+fn single_series_column_chart_varies_colours_by_point() {
+    let render = |vary: bool| {
+        let mut c = Chart::sample(ChartType::Column);
+        c.series.truncate(1);
+        c.vary_colors = vary;
+        let sh =
+            Shape { id: ShapeId(800), xfrm: Some(Xfrm::new(50.0, 50.0, 400.0, 300.0)), kind: ShapeKind::Chart(Box::new(c)), ..Default::default() };
+        render_slide(&deck_with(vec![sh]), 0, &RenderOpts { scale: 1.0, ..Default::default() }).pixels
+    };
+    assert_ne!(render(true), render(false));
 }

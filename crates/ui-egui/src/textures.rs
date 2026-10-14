@@ -22,6 +22,7 @@ struct Key {
     extra: u64,
     /// The pasteboard region the slide's drawing calls for (canvas only).
     want: Region,
+    skip_text: Option<ShapeId>,
 }
 
 struct Entry {
@@ -248,7 +249,8 @@ impl Textures {
     /// The canvas texture for slide `index`, the slide being `size` pixels, and the region it
     /// covers: the slide, grown over the pasteboard to show what reaches off the slide within
     /// `visible` (the canvas, in pixels from the slide's top-left corner). `extra` changes with the
-    /// GIF frames.
+    /// GIF frames. `skip_text` leaves out one shape's text (the prompt of a placeholder being typed
+    /// into).
     #[allow(clippy::too_many_arguments)]
     pub fn slide(
         &mut self,
@@ -261,6 +263,7 @@ impl Textures {
         extra: u64,
         grayscale: bool,
         gif_times: &[(ShapeId, f64)],
+        skip_text: Option<ShapeId>,
         anim: Option<(&deckcraft_anim::Timeline, f64)>,
     ) -> Option<(TextureHandle, Region)> {
         let slide = p.slides.get(index)?.clone();
@@ -289,6 +292,7 @@ impl Textures {
             language: if edit { crate::i18n::current() } else { crate::i18n::Language::En },
             extra: extra ^ grayscale as u64 ^ anim_key(anim),
             want,
+            skip_text,
         };
         if let Some(e) = &self.canvas
             && e.key == key
@@ -308,6 +312,7 @@ impl Textures {
                 offset: region.offset(),
                 size: Some(region.size()),
                 state,
+                skip_text,
                 ..Default::default()
             };
             deckcraft_render::render_slide_drawn(p, index, &opts)
@@ -366,6 +371,7 @@ impl Textures {
             language: crate::i18n::Language::En,
             extra: 0,
             want: Region::slide(width_px, h),
+            skip_text: None,
         };
         self.clock += 1;
         let clock = self.clock;
@@ -491,7 +497,7 @@ mod language_tests {
     fn switching_interface_language_refreshes_cached_hints_and_preserves_user_content() {
         fn updated_canvas(ctx: &egui::Context, textures: &mut Textures, p: &Presentation, language: crate::i18n::Language) -> egui::ImageData {
             crate::i18n::set_current(language);
-            let (tex, _) = textures.slide(ctx, p, 0, (480, 270), Region::slide(480, 270), true, 0, false, &[], None).unwrap();
+            let (tex, _) = textures.slide(ctx, p, 0, (480, 270), Region::slide(480, 270), true, 0, false, &[], None, None).unwrap();
             let mut delta = ctx.tex_manager().write().take_delta();
             let image = delta.set.get(&tex.id()).and_then(|images| images.last()).map(|image| image.image.clone());
             delta.clear();
