@@ -47,6 +47,7 @@ fn title(id: &str) -> &'static str {
         "paragraph" => "Paragraph",
         "about" => "About DeckCraft",
         "preferences" => "Preferences",
+        "autocorrect" => "AutoCorrect",
         "export" => "Export",
         "symbol" => "Symbol",
         "photoAlbum" => "Photo Album",
@@ -1709,22 +1710,147 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ok || cancel
         }
         "spelling" => {
-            let v = app.session.execute("review.spelling", &json!({})).unwrap_or_default();
+            // Words skipped with Ignore All while the dialog is open, one per line.
+            let ignored = d.get("ignore", "");
+            let ignore: Vec<&str> = ignored.lines().filter(|l| !l.is_empty()).collect();
+            let v = app.session.execute("review.spelling", &json!({"ignore": ignore})).unwrap_or_default();
             let list = v.as_array().cloned().unwrap_or_default();
+            let info = app.session.execute("review.dictionary", &json!({})).unwrap_or_default();
+            let available = info.get("available").and_then(Value::as_bool).unwrap_or(false);
+            match info.get("found").and_then(Value::as_str) {
+                Some(f) if available => {
+                    ui.label(egui::RichText::new(format!("Dictionary: {}", f.rsplit(['/', '\\']).next().unwrap_or(f))).small().weak())
+                }
+                _ if available => {
+                    ui.label(egui::RichText::new(format!("Dictionary: {}", info.get("lang").and_then(Value::as_str).unwrap_or(""))).small().weak())
+                }
+                _ => ui.label(
+                    egui::RichText::new(format!(
+                        "No {} dictionary is installed, so only common misspellings are found. Put a Hunspell .aff/.dic pair in {}.",
+                        info.get("lang").and_then(Value::as_str).unwrap_or("en-US"),
+                        info.get("folders")
+                            .and_then(Value::as_array)
+                            .and_then(|a| a.get(1).or(a.first()))
+                            .and_then(Value::as_str)
+                            .unwrap_or("a dictionaries folder")
+                    ))
+                    .small()
+                    .weak(),
+                ),
+            };
             if list.is_empty() {
                 ui.label(crate::i18n::tr("The spelling check is complete. No issues found."));
             }
-            for item in &list {
-                ui.horizontal(|ui| {
+            let mut add_ignore = None;
+            egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                for item in &list {
                     let w = item.get("word").and_then(Value::as_str).unwrap_or("");
-                    ui.label(crate::i18n::format(
-                        "Slide {}: “{w}”",
-                        &[(item.get("slide").and_then(Value::as_u64).unwrap_or(0) + 1).to_string(), (w).to_string()],
-                    ));
-                    if ui.small_button(crate::i18n::tr("Go to")).clicked() {
-                        let _ = app.run("slide.go", json!({"index": item.get("slide").cloned().unwrap_or_default()}));
+                    let slide = item.get("slide").cloned().unwrap_or_default();
+                    let shape = item.get("shape").cloned().unwrap_or_default();
+                    ui.horizontal(|ui| {
+                        ui.label(crate::i18n::format("Slide {}: “{w}”", &[(slide.as_u64().unwrap_or(0) + 1).to_string(), w.to_string()]));
+                        if ui.small_button(crate::i18n::tr("Go to")).clicked() {
+                            let _ = app.run("slide.go", json!({"index": slide}));
+                            let _ = app.run("edit.select", json!({"ids": [shape]}));
+                        }
+                        if ui.small_button(crate::i18n::tr("Ignore All")).clicked() {
+                            add_ignore = Some(w.to_string());
+                        }
+                        if ui.small_button(crate::i18n::tr("Add to Dictionary")).clicked()
+                            && let Err(e) = app.session.execute("review.addToDictionary", &json!({"word": w}))
+                        {
+                            app.set_status(e.to_string());
+                        }
+                    });
+                    let sug: Vec<String> = item
+                        .get("suggestions")
+                        .and_then(Value::as_array)
+                        .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                        .unwrap_or_default();
+                    if item.get("repeated").and_then(Value::as_bool).unwrap_or(false) && !item.get("notes").and_then(Value::as_bool).unwrap_or(false)
+                    {
+                        ui.horizontal(|ui| {
+                            ui.add_space(16.0);
+                            ui.label(egui::RichText::new(crate::i18n::tr("Repeated word")).weak());
+                            if ui.small_button(crate::i18n::tr("Delete Repeated Word")).clicked() {
+                                let from = item.get("deleteFrom").and_then(Value::as_u64).unwrap_or(0) as usize;
+                                let end = item.get("end").and_then(Value::as_u64).unwrap_or(0) as usize;
+                                let para = item.get("para").and_then(Value::as_u64).unwrap_or(0) as usize;
+                                let text = app.session.active().and_then(|st| {
+                                    let sh = st.shape(deckcraft_model::ShapeId(shape.as_u64()? as u32))?;
+                                    let pp = match (item.get("row").and_then(Value::as_u64), item.get("col").and_then(Value::as_u64), &sh.kind) {
+                                        (Some(r), Some(c), deckcraft_model::ShapeKind::Table(tb)) => {
+                                            tb.cell(r as usize, c as usize)?.text.paragraphs.get(para)?.text()
+                                        }
+                                        _ => sh.text.as_ref()?.paragraphs.get(para)?.text(),
+                                    };
+                                    Some(pp.chars().skip(from).take(end.saturating_sub(from)).collect::<String>())
+                                });
+                                if let Some(gap) = text {
+                                    let mut p = json!({"shape": shape, "para": para, "start": from, "word": gap, "to": ""});
+                                    if let (Some(o), Some(r), Some(c)) = (p.as_object_mut(), item.get("row"), item.get("col")) {
+                                        o.insert("row".into(), r.clone());
+                                        o.insert("col".into(), c.clone());
+                                    }
+                                    run(app, "review.spellingChange", p);
+                                }
+                            }
+                        });
                     }
-                });
+                    if !sug.is_empty() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.add_space(16.0);
+                            ui.label(egui::RichText::new("Change to:").weak());
+                            for to in &sug {
+                                let r = ui.small_button(to.as_str()).on_hover_text("Click to change this one; Shift-click to change all");
+                                if r.clicked() {
+                                    let all = ui.input(|i| i.modifiers.shift);
+                                    if item.get("notes").and_then(Value::as_bool).unwrap_or(false) {
+                                        // A word in the notes: change that line of the slide's notes.
+                                        let si = slide.as_u64().unwrap_or(0) as usize;
+                                        let notes =
+                                            app.session.active().and_then(|d| d.doc.slides.get(si)).map(|s| s.notes_text()).unwrap_or_default();
+                                        let (pi, st) = (
+                                            item.get("para").and_then(Value::as_u64).unwrap_or(0) as usize,
+                                            item.get("start").and_then(Value::as_u64).unwrap_or(0) as usize,
+                                        );
+                                        let lines: Vec<String> = notes
+                                            .split('\n')
+                                            .enumerate()
+                                            .map(|(i, l)| {
+                                                if i != pi {
+                                                    return l.to_string();
+                                                }
+                                                let c: Vec<char> = l.chars().collect();
+                                                let n = w.chars().count();
+                                                if c.get(st..st + n).is_some_and(|x| x.iter().collect::<String>() == w) {
+                                                    c[..st].iter().chain(to.chars().collect::<Vec<_>>().iter()).chain(c[st + n..].iter()).collect()
+                                                } else {
+                                                    l.to_string()
+                                                }
+                                            })
+                                            .collect();
+                                        run(app, "slide.notes", json!({"text": lines.join("\n"), "index": si}));
+                                    } else {
+                                        let mut p = if all {
+                                            json!({"word": w, "to": to, "all": true})
+                                        } else {
+                                            json!({"shape": shape, "word": w, "to": to, "para": item.get("para"), "start": item.get("start")})
+                                        };
+                                        if !all && let (Some(o), Some(r), Some(c)) = (p.as_object_mut(), item.get("row"), item.get("col")) {
+                                            o.insert("row".into(), r.clone());
+                                            o.insert("col".into(), c.clone());
+                                        }
+                                        run(app, "review.spellingChange", p);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+            if let Some(w) = add_ignore {
+                d.fields.insert("ignore".into(), format!("{ignored}{w}\n"));
             }
             let (ok, cancel) = buttons(ui, "Close");
             ok || cancel
@@ -1761,23 +1887,34 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ok || cancel
         }
         "language" => {
-            ui.label("Українська");
+            // Starts from the selected text's language and Do Not Check Spelling.
+            let (cur, np) = selected_language(app);
+            let lang = d.get("lang", &cur);
+            let mut no_proof = d.get("noProof", if np { "1" } else { "" }) == "1";
             ui.label(crate::i18n::tr("Mark selected text as:"));
-            for l in [
-                "English (United States)",
-                "English (United Kingdom)",
-                "Español",
-                "Français",
-                "Deutsch",
-                "Italiano",
-                "Português",
-                "日本語",
-                "中文",
-                "العربية",
-            ] {
-                let _ = ui.selectable_label(l.starts_with("English (United States)"), crate::i18n::tr(l));
+            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                // The selection's own language first when the list doesn't have it.
+                let own = (!crate::squiggles::LANGS.iter().any(|(_, t)| t.eq_ignore_ascii_case(&cur))).then(|| (cur.clone(), cur.clone()));
+                let all = own.into_iter().chain(crate::squiggles::LANGS.iter().map(|(n, t)| (n.to_string(), t.to_string())));
+                for (name, tag) in all {
+                    let installed = deckcraft_engine::spell::dictionary(&tag).is_some();
+                    let name = crate::i18n::tr(&name).to_string();
+                    let label = if installed { format!("{name}  ({})", crate::i18n::tr("dictionary")) } else { name };
+                    if ui.selectable_label(lang.eq_ignore_ascii_case(&tag), label).clicked() {
+                        d.fields.insert("lang".into(), tag);
+                    }
+                }
+            });
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(crate::i18n::tr("Spelling is checked for languages marked (dictionary).")).small().weak());
+            if ui.checkbox(&mut no_proof, crate::i18n::tr("Do not check spelling or grammar")).changed() {
+                d.fields.insert("noProof".into(), if no_proof { "1".into() } else { String::new() });
             }
             let (ok, cancel) = buttons(ui, "OK");
+            if ok {
+                let lang = d.get("lang", &cur);
+                run(app, "format.language", json!({"lang": lang, "noProof": no_proof}));
+            }
             ok || cancel
         }
         "customShow" => {
@@ -1939,6 +2076,48 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let (ok, _) = buttons(ui, "Close");
             ok
         }
+        "autocorrect" => {
+            let pr = &mut app.session.prefs;
+            ui.checkbox(&mut pr.ac_two_initials, "Correct TWo INitial CApitals");
+            ui.checkbox(&mut pr.ac_sentence_caps, "Capitalize first letter of sentences");
+            ui.checkbox(&mut pr.ac_days, "Capitalize names of days");
+            ui.checkbox(&mut pr.ac_caps_lock, "Correct accidental use of cAPS LOCK key");
+            ui.checkbox(&mut pr.ac_fractions, "Replace fractions (1/2) with fraction characters (½)");
+            ui.checkbox(&mut pr.autocorrect, "Replace text as you type");
+            ui.add_space(4.0);
+            let mut from = d.get("from", "");
+            let mut to = d.get("to", "");
+            ui.horizontal(|ui| {
+                ui.label("Replace");
+                ui.add(egui::TextEdit::singleline(&mut from).desired_width(90.0));
+                ui.label("With");
+                ui.add(egui::TextEdit::singleline(&mut to).desired_width(130.0));
+                if ui.add_enabled(!from.trim().is_empty(), egui::Button::new("Add")).clicked() {
+                    run(app, "text.autocorrect", json!({"add": [from.trim(), to]}));
+                    from.clear();
+                    to.clear();
+                }
+            });
+            d.fields.insert("from".into(), from.clone());
+            d.fields.insert("to".into(), to);
+            let list = app.session.execute("text.autocorrect", &json!({})).ok().and_then(|v| v.get("entries").cloned());
+            let entries: Vec<(String, String)> = list.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+            let q = from.trim().to_lowercase();
+            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                egui::Grid::new("ac-list").striped(true).show(ui, |ui| {
+                    for (k, v) in entries.iter().filter(|(k, _)| q.is_empty() || k.to_lowercase().starts_with(&q)) {
+                        ui.label(k);
+                        ui.label(v);
+                        if ui.small_button("Delete").clicked() {
+                            run(app, "text.autocorrect", json!({"remove": k}));
+                        }
+                        ui.end_row();
+                    }
+                });
+            });
+            let (ok, cancel) = buttons(ui, "OK");
+            ok || cancel
+        }
         "preferences" => {
             ui.horizontal(|ui| {
                 ui.label(crate::i18n::tr("Interface language:"));
@@ -1969,7 +2148,15 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ui.checkbox(&mut app.session.prefs.smart_guides, crate::i18n::tr("Show smart guides"));
             ui.checkbox(&mut app.session.prefs.snap_to_grid, crate::i18n::tr("Snap objects to grid"));
             ui.checkbox(&mut app.session.prefs.smart_quotes, crate::i18n::tr("Replace straight quotes with smart quotes"));
-            ui.checkbox(&mut app.session.prefs.autocorrect, crate::i18n::tr("AutoCorrect as you type"));
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut app.session.prefs.autocorrect, crate::i18n::tr("AutoCorrect as you type"));
+                if ui.button(crate::i18n::tr("AutoCorrect Options…")).clicked() {
+                    *d = Dialog::new("autocorrect");
+                }
+            });
+            if d.id != "preferences" {
+                return false;
+            }
             ui.horizontal(|ui| {
                 ui.label(crate::i18n::tr("Your name (comments):"));
                 ui.text_edit_singleline(&mut app.session.prefs.author);
@@ -2415,6 +2602,33 @@ pub fn paint_logo(p: &egui::Painter, r: Rect) {
     ));
 }
 
+/// The selection's proofing language and whether it's marked Do Not Check Spelling: the run at
+/// the caret, else the first run of the first selected shape; US English when none says.
+pub fn selected_language(app: &SlideApp) -> (String, bool) {
+    let Some(st) = app.session.active() else { return ("en-US".into(), false) };
+    let run = |sh: &deckcraft_model::Shape, at: Option<(usize, usize)>| -> Option<deckcraft_model::RunProps> {
+        let t = sh.text.as_ref()?;
+        if let Some((p, c)) = at {
+            let para = t.paragraphs.get(p)?;
+            let mut n = 0;
+            for r in &para.runs {
+                n += r.char_len();
+                if c <= n {
+                    return Some(r.props.clone());
+                }
+            }
+            return para.runs.last().map(|r| r.props.clone());
+        }
+        t.paragraphs.iter().flat_map(|p| &p.runs).next().map(|r| r.props.clone())
+    };
+    let props = match &st.selection.text {
+        Some(t) if !t.notes && t.cell.is_none() => st.shape(t.shape).and_then(|sh| run(sh, Some(t.caret))),
+        _ => st.selection.shapes.first().and_then(|id| st.shape(*id)).and_then(|sh| run(sh, None)),
+    };
+    let props = props.unwrap_or_default();
+    (props.lang.unwrap_or_else(|| "en-US".into()), props.no_proof == Some(true))
+}
+
 #[cfg(test)]
 #[path = "size_position_tests.rs"]
 mod size_position_tests;
@@ -2654,3 +2868,7 @@ mod trim_media_tests {
         assert_eq!(seed.fade_out, "1");
     }
 }
+
+#[cfg(test)]
+#[path = "spelling_tests.rs"]
+mod spelling_tests;

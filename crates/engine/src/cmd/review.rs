@@ -34,7 +34,18 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, p| neighbour(s, p, false)
         ),
         cmd!(query "review.accessibility", "Check Accessibility", ["Review", "Accessibility"], None, "{} → [{slide, shape, issue}]", has_doc, accessibility),
-        cmd!(query "review.spelling", "Spelling", ["Review", "Proofing"], Some("F7"), "{} → [{slide, shape, word}] (words not in the built-in list)", has_doc, spelling),
+        cmd!(query "review.spelling", "Spelling", ["Review", "Proofing"], Some("F7"), "{lang?, ignore?:[word]} → [{slide, shape?, row?, col?, notes?, para, start, end, word, lang, suggestions}] (shapes, table cells and notes; repeated words as {repeated, deleteFrom}; runs marked noProof skipped; each run in its own language, lang? for runs without one; Hunspell dictionaries installed on the system, else a built-in list of common misspellings)", has_doc, spelling),
+        cmd!(
+            "review.spellingChange",
+            "Change Spelling",
+            ["Review", "Proofing"],
+            None,
+            "{shape, word, to, all?, para?, start?, row?, col?} → {changed} (replace the whole word in that shape's text, the one at para/start, or in every shape with all)",
+            has_doc,
+            spelling_change
+        ),
+        cmd!(noundo "review.addToDictionary", "Add to Dictionary", ["Review", "Proofing"], None, "{word} → {word, file} (append to the user dictionary file; not an undo step)", always, add_to_dictionary),
+        cmd!(query "review.dictionary", "Spelling Dictionary", ["Review", "Proofing"], None, "{lang?} → {lang, available, found, folders} (whether review.spelling has a dictionary, and which file)", always, dictionary_info),
         cmd!(noundo "show.fromStart", "Play from Start", ["Slide Show", "Start Slide Show"], Some("Cmd+Shift+Enter"), "{}", has_slide, |s, _| start(s, 0)),
         cmd!(noundo "show.fromCurrent", "Play from Current Slide", ["Slide Show", "Start Slide Show"], Some("Cmd+Enter"), "{}", has_slide, |s, _| {
             let i = s.doc()?.selection.slide;
@@ -240,50 +251,269 @@ fn accessibility(s: &mut Session, _p: &Value) -> Result<Value> {
     Ok(Value::Array(out))
 }
 
-fn spelling(s: &mut Session, _p: &Value) -> Result<Value> {
-    // A small built-in list of frequent misspellings (full dictionaries come later).
-    const COMMON: &[&str] = &[
-        "teh",
-        "recieve",
-        "seperate",
-        "occured",
-        "untill",
-        "wich",
-        "becuase",
-        "definately",
-        "thier",
-        "alot",
-        "accomodate",
-        "acheive",
-        "adress",
-        "begining",
-        "beleive",
-        "calender",
-        "commited",
-        "enviroment",
-        "goverment",
-        "independant",
-        "neccessary",
-        "occassion",
-        "publically",
-        "reccomend",
-        "tommorow",
-        "wierd",
-    ];
+/// Frequent misspellings, used when no dictionary for the language is installed.
+const COMMON: &[&str] = &[
+    "teh",
+    "recieve",
+    "seperate",
+    "occured",
+    "untill",
+    "wich",
+    "becuase",
+    "definately",
+    "thier",
+    "alot",
+    "accomodate",
+    "acheive",
+    "adress",
+    "begining",
+    "beleive",
+    "calender",
+    "commited",
+    "enviroment",
+    "goverment",
+    "independant",
+    "neccessary",
+    "occassion",
+    "publically",
+    "reccomend",
+    "tommorow",
+    "wierd",
+];
+
+/// The language a check uses: the `lang` parameter, else the first run that says, else US English.
+fn check_lang(doc: &deckcraft_model::Presentation, p: &Value) -> String {
+    if let Some(l) = str_param(p, "lang") {
+        return l.to_string();
+    }
+    let mut found = None;
+    for sl in &doc.slides {
+        deckcraft_model::walk(&sl.shapes, &mut |sh, _| {
+            if found.is_none()
+                && let Some(t) = &sh.text
+            {
+                found = t.paragraphs.iter().flat_map(|p| &p.runs).find_map(|r| r.props.lang.clone());
+            }
+        });
+    }
+    found.unwrap_or_else(|| "en-US".into())
+}
+
+fn spelling(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
+    let default = check_lang(&st.doc, p);
+    let ignore: Vec<String> =
+        p.get("ignore").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_lowercase).collect()).unwrap_or_default();
+    let mut dicts: std::collections::HashMap<String, Option<Arc<crate::spell::Dictionary>>> = Default::default();
     let mut out = vec![];
+    // Each misspelt word of `para`, reported with `at` (where the paragraph is) merged in.
+    let mut check = |para: &deckcraft_model::Paragraph, at: Value, out: &mut Vec<Value>| {
+        for w in crate::spell::repeated(para, &default) {
+            let mut v = json!({"start": w.start, "end": w.end, "word": w.text, "lang": w.lang, "repeated": true, "deleteFrom": w.repeated, "suggestions": []});
+            if let (Some(o), Some(a)) = (v.as_object_mut(), at.as_object()) {
+                o.extend(a.clone());
+            }
+            out.push(v);
+        }
+        let rep: Vec<usize> = crate::spell::repeated(para, &default).iter().map(|w| w.start).collect();
+        for w in crate::spell::paragraph_words(para, &default) {
+            if ignore.contains(&w.text.to_lowercase()) || rep.contains(&w.start) {
+                continue;
+            }
+            let dict = dicts.entry(w.lang.clone()).or_insert_with(|| crate::spell::dictionary(&w.lang)).clone();
+            let bad = match &dict {
+                Some(d) => !crate::spell::is_correct(d, &w.text),
+                None => COMMON.contains(&w.text.to_lowercase().as_str()),
+            };
+            if bad {
+                let sug = dict.as_ref().map(|d| d.suggest(&w.text, 5)).unwrap_or_default();
+                let mut v = json!({"start": w.start, "end": w.end, "word": w.text, "lang": w.lang, "suggestions": sug});
+                if let (Some(o), Some(a)) = (v.as_object_mut(), at.as_object()) {
+                    o.extend(a.clone());
+                }
+                out.push(v);
+            }
+        }
+    };
     for (i, sl) in st.doc.slides.iter().enumerate() {
         deckcraft_model::walk(&sl.shapes, &mut |sh, _| {
             if let Some(t) = &sh.text {
-                for w in t.text().split(|c: char| !c.is_alphanumeric() && c != '\'') {
-                    if COMMON.contains(&w.to_lowercase().as_str()) {
-                        out.push(json!({"slide": i, "shape": sh.id, "word": w}));
+                for (pi, para) in t.paragraphs.iter().enumerate() {
+                    check(para, json!({"slide": i, "shape": sh.id, "para": pi}), &mut out);
+                }
+            }
+            if let deckcraft_model::ShapeKind::Table(tb) = &sh.kind {
+                for (r, row) in tb.rows.iter().enumerate() {
+                    for (c, cell) in row.cells.iter().enumerate().filter(|(_, c)| !c.is_covered()) {
+                        for (pi, para) in cell.text.paragraphs.iter().enumerate() {
+                            check(para, json!({"slide": i, "shape": sh.id, "row": r, "col": c, "para": pi}), &mut out);
+                        }
                     }
                 }
             }
         });
+        // Speaker notes, a paragraph per line.
+        for (pi, para) in sl.notes.paragraphs.iter().enumerate() {
+            check(para, json!({"slide": i, "notes": true, "para": pi}), &mut out);
+        }
     }
     Ok(Value::Array(out))
+}
+
+fn add_to_dictionary(_s: &mut Session, p: &Value) -> Result<Value> {
+    let word = str_param(p, "word").filter(|w| !w.trim().is_empty()).ok_or_else(|| bad("review.addToDictionary", "missing `word`"))?;
+    crate::spell::add_user_word(word).map_err(|e| bad("review.addToDictionary", e.to_string()))?;
+    Ok(json!({"word": word.trim(), "file": crate::spell::user_dictionary_path().map(|p| p.display().to_string())}))
+}
+
+/// Replace whole-word `from` with `to` in `text`; how many were replaced.
+fn replace_word(text: &mut String, from: &str, to: &str, all: bool) -> usize {
+    let is_word = |c: char| c.is_alphanumeric() || c == '\'' || c == '’';
+    let mut n = 0;
+    let mut at = 0;
+    while let Some(i) = text.get(at..).and_then(|t| t.find(from)).map(|i| i + at) {
+        let end = i + from.len();
+        let before = text.get(..i).and_then(|t| t.chars().next_back()).is_some_and(is_word);
+        let after = text.get(end..).and_then(|t| t.chars().next()).is_some_and(is_word);
+        if before || after {
+            at = end;
+            continue;
+        }
+        text.replace_range(i..end, to);
+        n += 1;
+        at = i + to.len();
+        if !all {
+            break;
+        }
+    }
+    n
+}
+
+fn spelling_change(s: &mut Session, p: &Value) -> Result<Value> {
+    let word = str_param(p, "word").filter(|w| !w.is_empty()).ok_or_else(|| bad("review.spellingChange", "missing `word`"))?.to_string();
+    let to = str_param(p, "to").ok_or_else(|| bad("review.spellingChange", "missing `to`"))?.to_string();
+    let all = bool_or(p, "all", false);
+    let shape = p.get("shape").and_then(Value::as_u64);
+    if shape.is_none() && !all {
+        return Err(bad("review.spellingChange", "give `shape`, or `all: true`"));
+    }
+    // One exact occurrence (a squiggled word): paragraph `para`, from character `start`.
+    if let (Some(id), Some(para), Some(start)) = (shape, usize_param(p, "para"), usize_param(p, "start")) {
+        let id = deckcraft_model::ShapeId(u32::try_from(id).map_err(|_| bad("review.spellingChange", "bad `shape`"))?);
+        let end = start + word.chars().count();
+        let cell = usize_param(p, "row").zip(usize_param(p, "col"));
+        let slide = {
+            let st = s.doc()?;
+            let found = st.doc.slides.iter().position(|sl| {
+                deckcraft_model::find_shape(&sl.shapes, id)
+                    .and_then(|sh| match (cell, &sh.kind) {
+                        (Some((r, c)), deckcraft_model::ShapeKind::Table(tb)) => tb.cell(r, c)?.text.paragraphs.get(para),
+                        (Some(_), _) => None,
+                        (None, _) => sh.text.as_ref()?.paragraphs.get(para),
+                    })
+                    .is_some_and(|pp| pp.text().chars().skip(start).take(end - start).collect::<String>() == word)
+            });
+            found.ok_or_else(|| bad("review.spellingChange", "the word isn't there"))?
+        };
+        s.edit(|doc, _| {
+            let sl = doc.slides.get_mut(slide).ok_or_else(|| bad("review.spellingChange", "no slide"))?;
+            let sh = deckcraft_model::find_shape_mut(&mut Arc::make_mut(sl).shapes, id).ok_or_else(|| bad("review.spellingChange", "no shape"))?;
+            let pp = match (cell, &mut sh.kind) {
+                (Some((r, c)), deckcraft_model::ShapeKind::Table(tb)) => tb.cell_mut(r, c).and_then(|cl| cl.text.paragraphs.get_mut(para)),
+                (Some(_), _) => None,
+                (None, _) => sh.text.as_mut().and_then(|t| t.paragraphs.get_mut(para)),
+            };
+            if let Some(pp) = pp {
+                replace_chars(pp, start, end, &to);
+            }
+            Ok(())
+        })?;
+        return Ok(json!({"changed": 1}));
+    }
+    // Nothing to change makes no undo step.
+    let mut any = false;
+    let st = s.doc()?;
+    for sl in &st.doc.slides {
+        deckcraft_model::walk(&sl.shapes, &mut |sh, _| {
+            if shape.is_none_or(|id| serde_json::to_value(sh.id).ok().and_then(|v| v.as_u64()) == Some(id))
+                && let Some(t) = &sh.text
+            {
+                any |= t.paragraphs.iter().flat_map(|p| &p.runs).any(|r| replace_word(&mut r.text.clone(), &word, &to, false) > 0);
+            }
+        });
+    }
+    if !any {
+        return Ok(json!({"changed": 0}));
+    }
+    let changed = s.edit(|doc, _| {
+        let mut n = 0;
+        let id_of = |sh: &deckcraft_model::Shape| serde_json::to_value(sh.id).ok().and_then(|v| v.as_u64());
+        for sl in &mut doc.slides {
+            let mut hit = false;
+            deckcraft_model::walk(&sl.shapes, &mut |sh, _| {
+                hit |= shape.is_none_or(|id| id_of(sh) == Some(id)) && sh.text.as_ref().is_some_and(|t| t.text().contains(word.as_str()));
+            });
+            if !hit || (!all && n > 0) {
+                continue;
+            }
+            walk_text_mut(&mut Arc::make_mut(sl).shapes, 0, &mut |sh| {
+                if shape.is_some_and(|id| id_of(sh) != Some(id)) || (!all && n > 0) {
+                    return;
+                }
+                let Some(t) = sh.text.as_mut() else { return };
+                for r in t.paragraphs.iter_mut().flat_map(|p| p.runs.iter_mut()) {
+                    if !all && n > 0 {
+                        break;
+                    }
+                    n += replace_word(&mut r.text, &word, &to, all);
+                }
+            });
+        }
+        Ok(n)
+    })?;
+    Ok(json!({"changed": changed}))
+}
+
+/// Replace characters `start..end` of `p` with `to`, in the run where they start (later runs lose
+/// the rest of the range).
+fn replace_chars(p: &mut deckcraft_model::Paragraph, start: usize, end: usize, to: &str) {
+    let mut at = 0;
+    let mut placed = false;
+    for r in &mut p.runs {
+        let n = r.char_len();
+        let (a, b) = (start.max(at), end.min(at + n));
+        if a < b && r.kind == deckcraft_model::text::RunKind::Text {
+            let byte = |c: usize| r.text.char_indices().nth(c).map_or(r.text.len(), |(i, _)| i);
+            let (x, y) = (byte(a - at), byte(b - at));
+            r.text.replace_range(x..y, if placed { "" } else { to });
+            placed = true;
+        }
+        at += n;
+    }
+    p.runs.retain(|r| !(r.kind == deckcraft_model::text::RunKind::Text && r.text.is_empty()));
+}
+
+fn walk_text_mut(shapes: &mut [deckcraft_model::Shape], depth: usize, f: &mut dyn FnMut(&mut deckcraft_model::Shape)) {
+    if depth > 64 {
+        return;
+    }
+    for sh in shapes.iter_mut() {
+        f(sh);
+        if let deckcraft_model::ShapeKind::Group { children, .. } = &mut sh.kind {
+            walk_text_mut(children, depth + 1, f);
+        }
+    }
+}
+
+fn dictionary_info(s: &mut Session, p: &Value) -> Result<Value> {
+    let lang = match s.doc() {
+        Ok(st) => check_lang(&st.doc, p),
+        Err(_) => str_param(p, "lang").unwrap_or("en-US").to_string(),
+    };
+    let dirs = crate::spell::search_dirs();
+    let found = crate::spell::find_in(&dirs, &lang).map(|(a, _)| a.with_extension("").display().to_string());
+    let available = crate::spell::dictionary(&lang).is_some();
+    Ok(json!({"lang": lang, "available": available, "found": found, "folders": dirs.iter().map(|d| d.display().to_string()).collect::<Vec<_>>()}))
 }
 
 fn start(s: &mut Session, from: usize) -> Result<Value> {

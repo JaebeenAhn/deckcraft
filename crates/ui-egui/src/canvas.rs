@@ -227,6 +227,12 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
     ime_output(app, ui, xf);
     media_bar(app, ui, xf);
     gif_buttons(app, ui, xf, &gifs);
+    if resp.secondary_clicked()
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let word = app.session.active().and_then(|st| app.squiggles.word_at(st, xf.to_slide(p), 4.0 / xf.scale.max(0.01) as f64));
+        app.squiggles.menu_word = word;
+    }
     context_menu(app, &resp);
 }
 
@@ -498,6 +504,14 @@ fn poly(p: &egui::Painter, pts: [Pos2; 4], stroke: Stroke) {
 }
 
 fn overlays(app: &mut SlideApp, ui: &Ui, painter: &egui::Painter, xf: Xf, t: &Tokens) {
+    // Spelling squiggles under misspelt words (checked in the background).
+    if let Some(st) = app.session.active() {
+        let lines = app.squiggles.update(st, Some(ui.ctx()));
+        let scale = (xf.to_screen(Point::new(1.0, 0.0)) - xf.to_screen(Point::new(0.0, 0.0))).length();
+        for (a, b) in lines {
+            crate::squiggles::paint(painter, xf.to_screen(a), xf.to_screen(b), scale);
+        }
+    }
     let Some(st) = app.session.active() else { return };
     let sel_stroke = Stroke::new(1.0, t.selection);
     let editing = st.selection.text.clone();
@@ -716,6 +730,16 @@ fn draw_preview(app: &SlideApp, p: &egui::Painter, xf: Xf, x: Xfrm, t: &Tokens) 
         ToolKind::Shape { preset } => preset.clone(),
         _ => "rect".into(),
     };
+    if preset == deckcraft_engine::tools::DRAW_TABLE {
+        // A border inside a table (flat), or the outline of a new table.
+        let (a, b) = (xf.to_screen(Point::new(x.x, x.y)), xf.to_screen(Point::new(x.x + x.w, x.y + x.h)));
+        if x.w < 0.5 || x.h < 0.5 {
+            p.line_segment([a, b], Stroke::new(1.5, t.accent));
+        } else {
+            p.rect_stroke(Rect::from_two_pos(a, b), 0.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
+        }
+        return;
+    }
     if deckcraft_geom::preset::is_line_like(&preset) {
         let a = x.affine();
         p.line_segment([xf.to_screen(a * Point::new(0.0, 0.0)), xf.to_screen(a * Point::new(x.w, x.h))], Stroke::new(1.5, t.accent));
@@ -758,6 +782,76 @@ fn context_menu(app: &mut SlideApp, resp: &egui::Response) {
                 ui.close();
             }
             return;
+        }
+        // A misspelt word under the pointer: its suggestions, then Ignore All and Add to Dictionary.
+        if let Some(w) = app.squiggles.menu_word.clone() {
+            if let Some(from) = w.delete_from {
+                if ui.button(egui::RichText::new("Delete Repeated Word").strong()).clicked() {
+                    let cut: String = format!("{}{}", " ".repeat(w.start - from), w.word);
+                    // The gap is spaces; take it from the text so tabs or no-break spaces match.
+                    let gap = app
+                        .session
+                        .active()
+                        .and_then(|st| match w.tag {
+                            crate::squiggles::Tag::Shape { id, para } => st.shape(id)?.text.as_ref()?.paragraphs.get(para).map(|p| p.text()),
+                            crate::squiggles::Tag::Cell { id, row, col, para } => match &st.shape(id)?.kind {
+                                deckcraft_model::ShapeKind::Table(tb) => tb.cell(row, col)?.text.paragraphs.get(para).map(|p| p.text()),
+                                _ => None,
+                            },
+                            crate::squiggles::Tag::Notes { .. } => None,
+                        })
+                        .map(|t| t.chars().skip(from).take(w.start + w.word.chars().count() - from).collect::<String>())
+                        .unwrap_or(cut);
+                    let mut p = json!({"para": 0, "start": from, "word": gap, "to": ""});
+                    if let Some(o) = p.as_object_mut() {
+                        match w.tag {
+                            crate::squiggles::Tag::Shape { id, para } => {
+                                o.insert("shape".into(), json!(id));
+                                o.insert("para".into(), json!(para));
+                            }
+                            crate::squiggles::Tag::Cell { id, row, col, para } => {
+                                o.insert("shape".into(), json!(id));
+                                o.insert("row".into(), json!(row));
+                                o.insert("col".into(), json!(col));
+                                o.insert("para".into(), json!(para));
+                            }
+                            crate::squiggles::Tag::Notes { .. } => {}
+                        }
+                    }
+                    let _ = app.run("review.spellingChange", p);
+                    app.squiggles.menu_word = None;
+                    ui.close();
+                }
+            } else if w.suggestions.is_empty() {
+                ui.label(egui::RichText::new("(no spelling suggestions)").weak());
+            }
+            for to in &w.suggestions {
+                if ui.button(egui::RichText::new(to).strong()).clicked() {
+                    let p = match w.tag {
+                        crate::squiggles::Tag::Shape { id, para } => json!({"shape": id, "para": para, "start": w.start, "word": w.word, "to": to}),
+                        crate::squiggles::Tag::Cell { id, row, col, para } => {
+                            json!({"shape": id, "row": row, "col": col, "para": para, "start": w.start, "word": w.word, "to": to})
+                        }
+                        crate::squiggles::Tag::Notes { .. } => json!({}),
+                    };
+                    let _ = app.run("review.spellingChange", p);
+                    app.squiggles.menu_word = None;
+                    ui.close();
+                }
+            }
+            if ui.button("Ignore All").clicked() {
+                app.squiggles.ignore(&w.word);
+                app.squiggles.menu_word = None;
+                ui.close();
+            }
+            if ui.button("Add to Dictionary").clicked() {
+                if let Err(e) = app.session.execute("review.addToDictionary", &json!({"word": w.word})) {
+                    app.set_status(e.to_string());
+                }
+                app.squiggles.menu_word = None;
+                ui.close();
+            }
+            ui.separator();
         }
         let has_sel = app.session.active().is_some_and(|d| !d.selection.shapes.is_empty());
         for (l, id) in [("Cut", "edit.cut"), ("Copy", "edit.copy"), ("Paste", "edit.paste")] {

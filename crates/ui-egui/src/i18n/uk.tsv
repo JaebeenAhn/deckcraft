@@ -12,6 +12,7 @@
 + Row	+ Рядок
 + Series	+ Ряд даних
 +Bin	+Бін
+ (not checked)	 (не перевіряється)
 100% Stacked Bar	Нормована лінійчата з накопиченням
 100% Stacked Column	Нормована стовпчаста з накопиченням
 35mm Slides	Слайди 35 мм
@@ -57,6 +58,7 @@ Add Font	Додати шрифт
 Add Point	Додати точку
 Add Section	Додати розділ
 Add Shape	Додати фігуру
+Add to Dictionary	Додати до словника
 Add to Quick Access Toolbar	Додати до панелі швидкого доступу
 Add\nAnimation	Додати анімацію
 Address:	Адреса:
@@ -1256,6 +1258,8 @@ Arrow: Curved Right	Стрілка: Вигнута праворуч
 Arrow: Curved Up	Стрілка: Вигнута вгору
 Arrow: Swoosh	Стрілка: Дугова
 Artistic Effects	Художні ефекти
+AutoCorrect Options	Параметри автовиправлення
+AutoCorrect Options…	Параметри автовиправлення…
 Bean	Квасоля
 Black and White: 25%	Чорно-білий: 25%
 Black and White: 50%	Чорно-білий: 50%
@@ -1281,6 +1285,7 @@ Callout: Up-Down Arrow	Виноска: Стрілка вгору-вниз
 Cell Margins	Поля клітинки
 Change Colors	Змінити кольори
 Change Layout	Змінити макет
+Change Spelling	Змінити написання
 Chart Marker: Cross Lines	Маркер діаграми: Перехресні лінії
 Chart Marker: Plus Lines	Маркер діаграми: Плюс із ліній
 Chart Marker: Star Lines	Маркер діаграми: Зірка з ліній
@@ -1311,6 +1316,7 @@ Curved Square	Заокруглений квадрат
 Customize Quick Access Toolbar	Налаштувати панель швидкого доступу
 Decaying Wave	Затухаюча хвиля
 Delete Point	Видалити точку
+Delete Repeated Word	Видалити повторене слово
 Demote	Понизити рівень
 Diagonal Down Right	Діагональ униз праворуч
 Diagonal Up Right	Діагональ угору праворуч
@@ -1318,8 +1324,11 @@ Diamonds From Bottom	Ромби знизу
 Diamonds From Left	Ромби зліва
 Diamonds From Right	Ромби справа
 Diamonds From Top	Ромби згори
+Do not check spelling or grammar	Не перевіряти правопис і граматику
+dictionary	словник
 Double Left	Подвійно ліворуч
 Double Right	Подвійно праворуч
+Draw Table	Намалювати таблицю
 Edit Photo Album…	Змінити фотоальбом…
 Edit Points	Змінити точки
 Edit SmartArt Text	Змінити текст SmartArt
@@ -1341,6 +1350,7 @@ Horizontal Figure 8	Горизонтальна вісімка
 Horizontal In	Горизонтально всередину
 Horizontal Out	Горизонтально назовні
 Icon Gallery	Колекція піктограм
+Ignore All	Пропустити всі
 In with Bounce	Усередину з відскоком
 Insert Picture in SmartArt	Вставити зображення в SmartArt
 Insert Picture in SmartArt…	Вставити зображення в SmartArt…
@@ -1379,6 +1389,7 @@ Recolor	Перефарбувати
 Recolor Gallery	Колекція перефарбування
 Remove from Quick Access Toolbar	Видалити з панелі швидкого доступу
 Remove Shape	Видалити фігуру
+Repeated word	Повторене слово
 Replace Fonts	Замінити шрифти
 Rescan Installed Fonts	Повторно знайти встановлені шрифти
 Reset to Defaults	Відновити стандартні
@@ -1396,6 +1407,8 @@ SmartArt Styles	Стилі SmartArt
 Smoothly From Left	Плавно зліва
 Smoothly From Right	Плавно справа
 Sound	Звук
+Spelling Dictionary	Орфографічний словник
+Spelling is checked for languages marked (dictionary).	Правопис перевіряється для мов, позначених (словник).
 Spiral Left	Спіраль ліворуч
 Spiral Right	Спіраль праворуч
 Spring	Пружина
@@ -1405,12 +1418,15 @@ Starter Templates	Початкові шаблони
 Strips In	Смуги всередину
 Strips Out	Смуги назовні
 Swoosh	Змах
+Table Eraser	Гумка для таблиці
 Text Pane	Область тексту
 Text Transform	Перетворення тексту
 Text Transparency	Прозорість тексту
 Themes and presentations	Теми й презентації
 Through Black From Left	Через чорний зліва
 Through Black From Right	Через чорний справа
+Variant Gallery	Колекція варіантів
+Variants	Варіанти
 Vertical Figure 8	Вертикальна вісімка
 Vertical In	Вертикально всередину
 Vertical Out	Вертикально назовні

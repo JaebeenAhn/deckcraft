@@ -2277,3 +2277,163 @@ fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
     let h: [u8; 4] = bytes.get(20..24)?.try_into().ok()?;
     Some((u32::from_be_bytes(w), u32::from_be_bytes(h)))
 }
+
+#[test]
+fn autocorrect_options_as_you_type() {
+    let mut s = session();
+    let title = s.doc().unwrap().current_slide().unwrap().shapes[0].id.0;
+    let typed = |s: &mut Session, text: &str| -> String {
+        s.execute("text.edit", &json!({"id": title})).unwrap();
+        s.execute("text.selectAll", &json!({})).ok();
+        s.execute("text.delete", &json!({"dir": "backward"})).ok();
+        for c in text.chars() {
+            s.execute("text.insert", &json!({"text": c.to_string()})).unwrap();
+        }
+        s.execute("text.get", &json!({"id": title})).unwrap()["text"].as_str().unwrap().to_string()
+    };
+    assert_eq!(typed(&mut s, "hello world. see you monday, i think. "), "Hello world. See you Monday, I think. ");
+    assert_eq!(typed(&mut s, "THe tHIS 1/2 recieved... "), "The This ½ received… ");
+    // Options turn rules off.
+    s.execute("text.autocorrect", &json!({"sentenceCaps": false, "days": false})).unwrap();
+    assert_eq!(typed(&mut s, "hello monday "), "hello monday ");
+    // Your own entries, and deleting a built-in one.
+    s.execute("text.autocorrect", &json!({"add": ["dc", "DeckCraft"], "remove": "teh"})).unwrap();
+    assert_eq!(typed(&mut s, "dc teh "), "DeckCraft teh ");
+    let v = s.execute("text.autocorrect", &json!({})).unwrap();
+    let entries = v["entries"].as_array().unwrap();
+    assert!(entries.iter().any(|e| e[0] == "dc"));
+    assert!(!entries.iter().any(|e| e[0] == "teh"));
+    assert!(s.execute("text.autocorrect", &json!({"add": ["two words", "x"]})).is_err());
+    // Off entirely.
+    s.execute("text.autocorrect", &json!({"on": false})).unwrap();
+    assert_eq!(typed(&mut s, "dc adn "), "dc adn ");
+    // Pasting a whole string applies only the replacement list, not the case rules.
+    s.execute("text.autocorrect", &json!({"on": true, "sentenceCaps": true})).unwrap();
+    s.execute("text.edit", &json!({"id": title})).unwrap();
+    s.execute("text.selectAll", &json!({})).ok();
+    s.execute("text.insert", &json!({"text": "monday notes "})).unwrap();
+    assert_eq!(s.execute("text.get", &json!({"id": title})).unwrap()["text"], "monday notes ");
+}
+
+#[test]
+fn theme_variants_apply_and_report_the_current_one() {
+    let mut s = session();
+    let name = deckcraft_model::theme::builtin_themes()[1].name.clone();
+    s.execute("design.theme", &json!({"name": name})).unwrap();
+    let v = s.execute("design.variants", &json!({})).unwrap();
+    assert_eq!(v["variants"].as_array().unwrap().len(), 4);
+    assert_eq!(v["current"], json!(0));
+    let base = s.doc().unwrap().doc.masters[0].theme.colors.clone();
+    s.execute("design.variant", &json!({"index": 1})).unwrap();
+    let c = s.doc().unwrap().doc.masters[0].theme.colors.clone();
+    assert_eq!(c.colors[4], base.colors[5], "accents rotate");
+    assert_eq!(c.colors[0], base.colors[0]);
+    assert_eq!(s.execute("design.variants", &json!({})).unwrap()["current"], json!(1));
+    // From a variant, another variant is built from the theme's own colours, not the variant's.
+    s.execute("design.variant", &json!({"index": 3})).unwrap();
+    let d = s.doc().unwrap().doc.masters[0].theme.colors.clone();
+    assert_eq!((d.colors[0], d.colors[1], d.colors[4]), (base.colors[1], base.colors[0], base.colors[4]));
+    s.execute("design.variant", &json!({"index": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.masters[0].theme.colors.colors, base.colors);
+    assert!(s.execute("design.variant", &json!({"index": 9})).is_err());
+    // It survives PPTX.
+    s.execute("design.variant", &json!({"index": 2})).unwrap();
+    let p = s.doc().unwrap().doc.as_ref().clone();
+    let back = deckcraft_pptx::import(&deckcraft_pptx::export(&p).unwrap()).unwrap();
+    assert_eq!(back.masters[0].theme.colors.colors, p.masters[0].theme.colors.colors);
+}
+
+#[test]
+fn spelling_uses_a_dictionary_suggests_and_changes() {
+    crate::spell::install("xx-TEST", crate::spell::Dictionary::parse(crate::spell::tests::AFF.as_bytes(), crate::spell::tests::DIC.as_bytes()));
+    let mut s = session();
+    let r = s.execute("shape.insert", &json!({"preset": "rect", "rect": [100, 100, 300, 100], "text": "Making sldie photos, sldie"})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    let v = s.execute("review.spelling", &json!({"lang": "xx-TEST"})).unwrap();
+    let list = v.as_array().unwrap();
+    assert_eq!(list.len(), 2, "{v}");
+    assert_eq!(list[0]["word"], "sldie");
+    assert_eq!(list[0]["suggestions"][0], "slide");
+    assert!(s.execute("review.spelling", &json!({"lang": "xx-TEST", "ignore": ["SLDIE"]})).unwrap().as_array().unwrap().is_empty());
+    let c = s.execute("review.spellingChange", &json!({"shape": id, "word": "sldie", "to": "slide"})).unwrap();
+    assert_eq!(c["changed"], 1);
+    assert_eq!(s.execute("review.spelling", &json!({"lang": "xx-TEST"})).unwrap().as_array().unwrap().len(), 1);
+    let c = s.execute("review.spellingChange", &json!({"word": "sldie", "to": "slide", "all": true})).unwrap();
+    assert_eq!(c["changed"], 1);
+    assert!(s.execute("review.spelling", &json!({"lang": "xx-TEST"})).unwrap().as_array().unwrap().is_empty());
+    // Whole words only, and one undo step per change.
+    assert_eq!(s.execute("review.spellingChange", &json!({"word": "slid", "to": "x", "all": true})).unwrap()["changed"], 0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("review.spelling", &json!({"lang": "xx-TEST"})).unwrap().as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn spelling_without_a_dictionary_falls_back_to_common_misspellings() {
+    let mut s = session();
+    s.execute("shape.insert", &json!({"preset": "rect", "rect": [100, 100, 300, 100], "text": "Teh qzxv"})).unwrap();
+    let v = s.execute("review.spelling", &json!({"lang": "zz-NONE"})).unwrap();
+    assert_eq!(v.as_array().map(Vec::len), Some(1));
+    assert_eq!(v[0]["word"], "Teh");
+    let d = s.execute("review.dictionary", &json!({"lang": "zz-NONE"})).unwrap();
+    assert!(d["found"].is_null());
+    assert_eq!(d["available"], false);
+}
+
+#[test]
+fn spelling_checks_each_run_in_its_language_and_learns_words() {
+    let dir = std::env::temp_dir().join(format!("deckcraft-userdic-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    crate::spell::set_user_dictionary_path(dir.join("user.dic"));
+    crate::spell::install("xx-ONE", crate::spell::Dictionary::parse(b"", b"2\nhello\nworld\n"));
+    crate::spell::install("xx-TWO", crate::spell::Dictionary::parse(b"", b"2\nhallo\nwelt\n"));
+    let mut s = session();
+    let r = s.execute("shape.insert", &json!({"preset": "rect", "rect": [100, 100, 300, 100], "text": "hello hallo deckcraft"})).unwrap();
+    let id = deckcraft_model::ShapeId(r["id"].as_u64().unwrap() as u32);
+    // The second word is in another language (as a PPTX run's `lang` gives it).
+    s.edit(|doc, _| {
+        let sh = deckcraft_model::find_shape_mut(&mut std::sync::Arc::make_mut(&mut doc.slides[0]).shapes, id).unwrap();
+        let p = &mut sh.text.as_mut().unwrap().paragraphs[0];
+        let t = p.runs[0].text.clone();
+        let props = p.runs[0].props.clone();
+        p.runs = vec![
+            deckcraft_model::Run::with(&t[..6], deckcraft_model::RunProps { lang: Some("xx-ONE".into()), ..props.clone() }),
+            deckcraft_model::Run::with(&t[6..12], deckcraft_model::RunProps { lang: Some("xx-TWO".into()), ..props.clone() }),
+            deckcraft_model::Run::with(&t[12..], deckcraft_model::RunProps { lang: Some("xx-ONE".into()), ..props }),
+        ];
+        Ok(())
+    })
+    .unwrap();
+    let v = s.execute("review.spelling", &json!({})).unwrap();
+    let words: Vec<_> = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| (w["word"].as_str().unwrap().to_string(), w["lang"].as_str().unwrap().to_string(), w["start"].as_u64().unwrap()))
+        .collect();
+    assert_eq!(words, vec![("deckcraft".to_string(), "xx-ONE".to_string(), 12)]);
+    s.execute("review.addToDictionary", &json!({"word": "deckcraft"})).unwrap();
+    assert!(s.execute("review.spelling", &json!({})).unwrap().as_array().unwrap().is_empty());
+    assert_eq!(std::fs::read_to_string(dir.join("user.dic")).unwrap(), "deckcraft\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn language_marks_text_and_no_proof_and_repeats_are_reported() {
+    crate::spell::install("xx-LN", crate::spell::Dictionary::parse(b"", b"3\nthe\nend\nis\n"));
+    let mut s = session();
+    let r = s.execute("shape.insert", &json!({"preset": "rect", "rect": [100, 100, 300, 100], "text": "the the end is nigh"})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    s.execute("edit.select", &json!({"ids": [id]})).unwrap();
+    s.execute("format.language", &json!({"lang": "xx-LN"})).unwrap();
+    let v = s.execute("review.spelling", &json!({})).unwrap();
+    let got: Vec<(String, bool)> = v.as_array().unwrap().iter().map(|w| (w["word"].as_str().unwrap().to_string(), w["repeated"] == true)).collect();
+    assert_eq!(got, vec![("the".to_string(), true), ("nigh".to_string(), false)]);
+    assert_eq!(v[0]["deleteFrom"], 3);
+    // Deleting the repeat through the exact-occurrence change.
+    s.execute("review.spellingChange", &json!({"shape": id, "para": 0, "start": 3, "word": " the", "to": ""})).unwrap();
+    let v = s.execute("shape.inspect", &json!({"id": id})).unwrap();
+    assert_eq!(v["shape"]["text"]["paragraphs"][0]["runs"][0]["text"], "the end is nigh");
+    s.execute("format.language", &json!({"noProof": true})).unwrap();
+    assert!(s.execute("review.spelling", &json!({})).unwrap().as_array().unwrap().is_empty());
+    assert!(s.execute("format.language", &json!({"lang": "en US!"})).is_err());
+}

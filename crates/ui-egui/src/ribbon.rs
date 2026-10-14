@@ -1205,6 +1205,10 @@ fn insert(app: &mut SlideApp, ui: &mut Ui) {
                 app.dialog = Some(crate::dialogs::Dialog::new("table"));
                 ui.close();
             }
+            if ui.button("Draw Table").clicked() {
+                app.session.set_tool(deckcraft_engine::ToolKind::Shape { preset: deckcraft_engine::tools::DRAW_TABLE.into() });
+                ui.close();
+            }
         });
     });
     group(ui, |ui| {
@@ -1470,6 +1474,29 @@ fn design(app: &mut SlideApp, ui: &mut Ui) {
             run(app, "app.browseThemeDialog", json!({}));
         }
     });
+    // Variants: the current theme in its four colour variations.
+    if let Some(th) = app.session.active().and_then(|d| d.doc.masters.first().map(|m| m.theme.clone())) {
+        let variants = deckcraft_model::theme::theme_variants(&th);
+        let tiles: Vec<deckcraft_model::Theme> = variants.iter().map(|c| deckcraft_model::Theme { colors: c.clone(), ..th.clone() }).collect();
+        let names: Vec<String> = variants.iter().map(|c| c.name.clone()).collect();
+        let sel = variants.iter().position(|c| c.colors == th.colors.colors);
+        group(ui, |ui| {
+            if let Some(i) = widgets::gallery(
+                ui,
+                tiles.len(),
+                vec2(84.0, 56.0),
+                sel,
+                |p, r, i| {
+                    if let Some(t) = tiles.get(i) {
+                        paint_theme_tile(p, r, t);
+                    }
+                },
+                |i| names.get(i).cloned().unwrap_or_default(),
+            ) {
+                run(app, "design.variant", json!({"index": i}));
+            }
+        });
+    }
     group(ui, |ui| {
         let r = big_button(ui, Icon::Colors, "Colors", true);
         r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Colors"));
@@ -2818,6 +2845,18 @@ fn table_design(app: &mut SlideApp, ui: &mut Ui) {
             });
         });
     });
+    // Draw Borders: the pencil splits cells along a line, the eraser merges across a border.
+    group(ui, |ui| {
+        use deckcraft_engine::ToolKind;
+        use deckcraft_engine::tools::{DRAW_TABLE, TABLE_ERASER};
+        let cur = app.session.tool.kind.clone();
+        for (icon, label, preset) in [(Icon::Pencil, "Draw Table", DRAW_TABLE), (Icon::Eraser, "Table Eraser", TABLE_ERASER)] {
+            let on = matches!(&cur, ToolKind::Shape { preset: p } if p == preset);
+            if big_button_ex(ui, icon, label, true, false, on).0.clicked() {
+                app.session.set_tool(if on { ToolKind::Select } else { ToolKind::Shape { preset: preset.into() } });
+            }
+        }
+    });
 }
 
 /// A Picture Styles gallery tile: a landscape "picture" in the style's shape and frame.
@@ -3362,3 +3401,7 @@ mod title_bar_tests {
         assert_eq!(title_geometry(false), (TITLE_H, 10.0, 26.0));
     }
 }
+
+#[cfg(test)]
+#[path = "drawtable_tests.rs"]
+mod drawtable_tests;
