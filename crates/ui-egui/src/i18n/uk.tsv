@@ -35,6 +35,7 @@ Accent 3	Акцент 3
 Accent 4	Акцент 4
 Accent 5	Акцент 5
 Accent 6	Акцент 6
+Accept Revision	Прийняти виправлення
 Accessibility Checker	Перевірка доступності
 Across	Поперек
 Action	Дія
@@ -55,11 +56,14 @@ Action Buttons	Кнопки дій
 Action Settings	Параметри дії
 Add Animation	Додати анімацію
 Add Font	Додати шрифт
+Add Guide	Додати напрямну
+Add Horizontal Guide	Додати горизонтальну напрямну
 Add Point	Додати точку
 Add Section	Додати розділ
 Add Shape	Додати фігуру
 Add to Dictionary	Додати до словника
 Add to Quick Access Toolbar	Додати до панелі швидкого доступу
+Add Vertical Guide	Додати вертикальну напрямну
 Add\nAnimation	Додати анімацію
 Address:	Адреса:
 Adjust Shape	Змінити фігуру
@@ -1290,6 +1294,8 @@ Chart Marker: Cross Lines	Маркер діаграми: Перехресні л
 Chart Marker: Plus Lines	Маркер діаграми: Плюс із ліній
 Chart Marker: Star Lines	Маркер діаграми: Зірка з ліній
 Commit Composition	Підтвердити введений текст
+Compare	Порівняти
+Compare…	Порівняти…
 Compose Text	Введення тексту (IME)
 Convert to Shapes	Перетворити на фігури
 Convert to SmartArt	Перетворити на SmartArt
@@ -1315,6 +1321,7 @@ Crescent Moon	Півмісяць
 Curved Square	Заокруглений квадрат
 Customize Quick Access Toolbar	Налаштувати панель швидкого доступу
 Decaying Wave	Затухаюча хвиля
+Delete Guide	Видалити напрямну
 Delete Point	Видалити точку
 Delete Repeated Word	Видалити повторене слово
 Demote	Понизити рівень
@@ -1332,14 +1339,18 @@ Draw Table	Намалювати таблицю
 Edit Photo Album…	Змінити фотоальбом…
 Edit Points	Змінити точки
 Edit SmartArt Text	Змінити текст SmartArt
+End Review	Завершити рецензування
 Enter a zoom percent	Введіть відсоток масштабу
 Find	Знайти
 Fonts in Presentation	Шрифти в презентації
+Font…	Шрифт…
 Football	Овальний м'яч
 From Bottom-Left	Із нижнього лівого кута
 From Bottom-Right	Із нижнього правого кута
 From Top-Left	Із верхнього лівого кута
 From Top-Right	Із верхнього правого кута
+Grid and Guides	Сітка й напрямні
+Grid Options…	Параметри сітки…
 Handout Placeholders	Заповнювачі роздаткових матеріалів
 Heartbeat	Серцебиття
 Hexagons From Bottom	Шестикутники знизу
@@ -1355,8 +1366,10 @@ In with Bounce	Усередину з відскоком
 Ink to Shape: turn drawn lines, rectangles, ovals and triangles into shapes	Рукописне введення у фігуру: перетворити намальовані лінії, прямокутники, овали й трикутники на фігури
 Insert Picture in SmartArt	Вставити зображення в SmartArt
 Insert Picture in SmartArt…	Вставити зображення в SmartArt…
+Insert Synonym	Вставити синонім
 Layout Placeholders	Заповнювачі макета
 Loop de Loop	Петля в петлі
+Move Guide	Перемістити напрямну
 Move Handle	Перемістити маркер
 Move Point	Перемістити точку
 Neutron	Нейтрон
@@ -1392,9 +1405,12 @@ Recolor Gallery	Колекція перефарбування
 Remove from Quick Access Toolbar	Видалити з панелі швидкого доступу
 Remove Shape	Видалити фігуру
 Repeated word	Повторене слово
+Replace	Замінити
 Replace Fonts	Замінити шрифти
+Replace…	Замінити…
 Rescan Installed Fonts	Повторно знайти встановлені шрифти
 Reset to Defaults	Відновити стандартні
+Revisions	Виправлення
 Right-click any ribbon button to add it.	Клацніть правою кнопкою будь-яку кнопку стрічки, щоб додати її.
 S Curve 1	S-крива 1
 S Curve 2	S-крива 2
@@ -1406,6 +1422,7 @@ Single Left	Одинарно ліворуч
 Single Right	Одинарно праворуч
 Size and Position…	Розмір і розташування…
 SmartArt Styles	Стилі SmartArt
+Smooth Corners	Згладити кути
 Smoothly From Left	Плавно зліва
 Smoothly From Right	Плавно справа
 Sound	Звук
@@ -1421,6 +1438,7 @@ Strips In	Смуги всередину
 Strips Out	Смуги назовні
 Swoosh	Змах
 Table Eraser	Гумка для таблиці
+Tabs…	Табуляція…
 Text Pane	Область тексту
 Text Transform	Перетворення тексту
 Text Transparency	Прозорість тексту

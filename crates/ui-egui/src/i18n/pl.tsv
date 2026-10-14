@@ -36,6 +36,7 @@ Accent 3	Akcent 3
 Accent 4	Akcent 4
 Accent 5	Akcent 5
 Accent 6	Akcent 6
+Accept Revision	Zaakceptuj poprawkę
 Accessibility Checker	Sprawdzanie ułatwień dostępu
 Across	W poprzek
 Action	Akcja
@@ -56,11 +57,14 @@ Action Buttons	Przyciski akcji
 Action Settings	Ustawienia akcji
 Add Animation	Dodaj animację
 Add Font	Dodaj czcionkę
+Add Guide	Dodaj prowadnicę
+Add Horizontal Guide	Dodaj prowadnicę poziomą
 Add Point	Dodaj punkt
 Add Section	Dodaj sekcję
 Add Shape	Dodaj kształt
 Add to Dictionary	Dodaj do słownika
 Add to Quick Access Toolbar	Dodaj do paska narzędzi Szybki dostęp
+Add Vertical Guide	Dodaj prowadnicę pionową
 Add\nAnimation	Dodaj\nanimację
 Address:	Adres:
 Adjust Shape	Dostosuj kształt
@@ -1291,6 +1295,8 @@ Chart Marker: Cross Lines	Znacznik wykresu: linie skrzyżowane
 Chart Marker: Plus Lines	Znacznik wykresu: plus z linii
 Chart Marker: Star Lines	Znacznik wykresu: gwiazdka z linii
 Commit Composition	Zatwierdź wprowadzany tekst
+Compare	Porównaj
+Compare…	Porównaj…
 Compose Text	Wprowadzanie tekstu (IME)
 Convert to Shapes	Konwertuj na kształty
 Convert to SmartArt	Konwertuj na grafikę SmartArt
@@ -1316,6 +1322,7 @@ Crescent Moon	Półksiężyc
 Curved Square	Zaokrąglony kwadrat
 Customize Quick Access Toolbar	Dostosuj pasek narzędzi Szybki dostęp
 Decaying Wave	Fala gasnąca
+Delete Guide	Usuń prowadnicę
 Delete Point	Usuń punkt
 Delete Repeated Word	Usuń powtórzony wyraz
 Demote	Obniż poziom
@@ -1333,14 +1340,18 @@ Draw Table	Rysuj tabelę
 Edit Photo Album…	Edytuj album fotograficzny…
 Edit Points	Edytuj punkty
 Edit SmartArt Text	Edytuj tekst grafiki SmartArt
+End Review	Zakończ recenzję
 Enter a zoom percent	Wpisz procent powiększenia
 Find	Znajdź
 Fonts in Presentation	Czcionki w prezentacji
+Font…	Czcionka…
 Football	Piłka owalna
 From Bottom-Left	Od lewego dolnego rogu
 From Bottom-Right	Od prawego dolnego rogu
 From Top-Left	Od lewego górnego rogu
 From Top-Right	Od prawego górnego rogu
+Grid and Guides	Siatka i prowadnice
+Grid Options…	Opcje siatki…
 Handout Placeholders	Symbole zastępcze materiałów informacyjnych
 Heartbeat	Bicie serca
 Hexagons From Bottom	Sześciokąty od dołu
@@ -1356,8 +1367,10 @@ In with Bounce	Do środka z odbiciem
 Ink to Shape: turn drawn lines, rectangles, ovals and triangles into shapes	Pismo odręczne na kształt: zamień narysowane linie, prostokąty, owale i trójkąty na kształty
 Insert Picture in SmartArt	Wstaw obraz do grafiki SmartArt
 Insert Picture in SmartArt…	Wstaw obraz do grafiki SmartArt…
+Insert Synonym	Wstaw synonim
 Layout Placeholders	Symbole zastępcze układu
 Loop de Loop	Pętla w pętli
+Move Guide	Przesuń prowadnicę
 Move Handle	Przesuń uchwyt
 Move Point	Przesuń punkt
 Neutron	Neutron
@@ -1393,9 +1406,12 @@ Recolor Gallery	Galeria zmiany koloru
 Remove from Quick Access Toolbar	Usuń z paska narzędzi Szybki dostęp
 Remove Shape	Usuń kształt
 Repeated word	Powtórzony wyraz
+Replace	Zamień
 Replace Fonts	Zamień czcionki
+Replace…	Zamień…
 Rescan Installed Fonts	Wyszukaj ponownie zainstalowane czcionki
 Reset to Defaults	Przywróć domyślne
+Revisions	Poprawki
 Right-click any ribbon button to add it.	Kliknij prawym przyciskiem dowolny przycisk wstążki, aby go dodać.
 S Curve 1	Krzywa S 1
 S Curve 2	Krzywa S 2
@@ -1407,6 +1423,7 @@ Single Left	Pojedynczo do lewej
 Single Right	Pojedynczo do prawej
 Size and Position…	Rozmiar i położenie…
 SmartArt Styles	Style grafiki SmartArt
+Smooth Corners	Wygładź narożniki
 Smoothly From Left	Płynnie od lewej
 Smoothly From Right	Płynnie od prawej
 Sound	Dźwięk
@@ -1422,6 +1439,7 @@ Strips In	Paski do środka
 Strips Out	Paski na zewnątrz
 Swoosh	Zamach
 Table Eraser	Gumka do tabel
+Tabs…	Tabulatory…
 Text Pane	Okienko tekstu
 Text Transform	Przekształcenie tekstu
 Text Transparency	Przezroczystość tekstu

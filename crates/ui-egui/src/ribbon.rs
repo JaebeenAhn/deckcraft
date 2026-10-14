@@ -573,6 +573,9 @@ fn font_group(app: &mut SlideApp, ui: &mut Ui, st: &Value) {
                         run(app, "format.color", json!({"color": cref_param(&c)}));
                     }
                 });
+                if ui.add_enabled(en, egui::Button::new("Font…").min_size(vec2(52.0, 22.0))).on_hover_text("Font").clicked() {
+                    run(app, "format.fontDialog", json!({}));
+                }
             });
         });
     });
@@ -752,7 +755,10 @@ fn paragraph_group(app: &mut SlideApp, ui: &mut Ui, st: &Value) {
                         }
                     }
                     if ui.button(crate::i18n::tr("Line Spacing Options…")).clicked() {
-                        app.dialog = Some(crate::dialogs::Dialog::new("paragraph"));
+                        run(app, "format.paragraphDialog", json!({}));
+                    }
+                    if ui.button(crate::i18n::tr("Tabs…")).clicked() {
+                        app.dialog = Some(crate::dialogs::Dialog::new("tabs"));
                     }
                 });
                 let r = icon_toggle(ui, Icon::Columns, "Columns", en, false);
@@ -803,6 +809,9 @@ fn paragraph_group(app: &mut SlideApp, ui: &mut Ui, st: &Value) {
                 });
                 let r = icon_toggle(ui, Icon::SmartArt, "Convert to SmartArt", enabled(app, "smartArt.fromText"), false);
                 egui::Popup::menu(&r).show(|ui| smartart_gallery(app, ui, "smartArt.fromText", json!({}), "", "", "", None));
+                if ui.add_enabled(en, egui::Button::new("Paragraph…").min_size(vec2(88.0, 22.0))).on_hover_text("Paragraph").clicked() {
+                    run(app, "format.paragraphDialog", json!({}));
+                }
             });
         });
     });
@@ -1168,12 +1177,17 @@ fn home(app: &mut SlideApp, ui: &mut Ui) {
         big(app, ui, Icon::Picture, "Picture", "app.insertPictureDialog", json!({}));
     });
     drawing_group(app, ui);
+    // Editing, as in PowerPoint: Find, Replace and Replace Fonts, then the Selection Pane.
     group(ui, |ui| {
+        ui.vertical(|ui| {
+            small(app, ui, Icon::Search, "Find", "app.find", json!({}));
+            small(app, ui, Icon::Spelling, "Replace", "app.replace", json!({}));
+            if small_button(ui, Icon::Fonts, "Replace Fonts…", enabled(app, "font.replace"), false).clicked() {
+                app.dialog = Some(crate::dialogs::Dialog::new("replaceFonts"));
+            }
+        });
         // Also under Arrange, but that is disabled until something is selected (#132).
         big(app, ui, Icon::SelectionPane, "Selection\nPane", "view.pane", json!({"pane": "selection"}));
-        if small_button(ui, Icon::Fonts, "Replace Fonts…", enabled(app, "font.replace"), false).clicked() {
-            app.dialog = Some(crate::dialogs::Dialog::new("replaceFonts"));
-        }
     });
     group(ui, |ui| {
         big(app, ui, Icon::DesignIdeas, "Design\nIdeas", "view.pane", json!({"pane": "designer"}));
@@ -2144,8 +2158,7 @@ fn comment_nav(app: &mut SlideApp, ui: &mut Ui, forward: bool) {
 fn review(app: &mut SlideApp, ui: &mut Ui) {
     group(ui, |ui| {
         big(app, ui, Icon::Spelling, "Spelling", "app.dialog", json!({"id": "spelling"}));
-        let r = big_button(ui, Icon::Thesaurus, "Thesaurus", false);
-        let _ = r.on_hover_text(crate::i18n::tr("Thesaurus (coming soon)"));
+        big(app, ui, Icon::Thesaurus, "Thesaurus", "review.thesaurusPane", json!({}));
     });
     group(ui, |ui| {
         big(app, ui, Icon::Accessibility, "Check\nAccessibility", "app.dialog", json!({"id": "accessibility"}));
@@ -2154,6 +2167,19 @@ fn review(app: &mut SlideApp, ui: &mut Ui) {
         let r = big_button(ui, Icon::Translate, "Translate", false);
         let _ = r.on_hover_text(crate::i18n::tr("Translation needs a language model (not bundled)"));
         big(app, ui, Icon::Language, "Language", "app.dialog", json!({"id": "language"}));
+    });
+    group(ui, |ui| {
+        big(app, ui, Icon::Compare, "Compare", "app.compareDialog", json!({}));
+        let comparing = enabled(app, "review.endCompare");
+        if big_button(ui, Icon::Check, "Accept\nAll", comparing).clicked() {
+            run(app, "review.accept", json!({"all": true}));
+        }
+        if big_button(ui, Icon::Close, "End\nReview", comparing).clicked() {
+            run(app, "review.endCompare", json!({}));
+            if app.ui.pane.as_deref() == Some("revisions") {
+                app.ui.pane = None;
+            }
+        }
     });
     group(ui, |ui| {
         big(app, ui, Icon::NewComment, "New\nComment", "app.dialog", json!({"id": "comment"}));
@@ -2214,6 +2240,9 @@ fn view(app: &mut SlideApp, ui: &mut Ui) {
                 app.ui.guides = gd;
             }
         });
+        if big_button(ui, Icon::Gridlines, "Grid\nOptions", true).clicked() {
+            let _ = app.run("view.gridOptions", json!({}));
+        }
         let n = app.ui.notes;
         if big_button_ex(ui, Icon::Notes, "Notes", true, false, n).0.clicked() {
             app.ui.notes = !n;
@@ -2385,6 +2414,8 @@ fn shape_format(app: &mut SlideApp, ui: &mut Ui) {
                 run(app, "shape.editPoints", json!({"on": true}));
                 ui.close();
             }
+            ui.separator();
+            smooth_corners_row(app, ui);
         });
         let can_merge = enabled(app, "shape.merge");
         let r = big_button(ui, Icon::MergeShapes, "Merge\nShapes", can_merge).on_hover_text(crate::i18n::tr("Merge Shapes"));
@@ -3463,3 +3494,45 @@ mod drawtable_tests;
 #[cfg(test)]
 #[path = "inktoshape_tests.rs"]
 mod inktoshape_tests;
+
+/// Edit Shape ▸ Smooth Corners (#286): a slider that smooths a rectangle's corners into a
+/// squircle. The radius is taken from the rectangle when the slider is first used and kept (in egui
+/// memory, per shape) so later moves re-smooth the same corners.
+fn smooth_corners_row(app: &mut SlideApp, ui: &mut egui::Ui) {
+    let Some((id, radius)) = app.session.active().and_then(|d| {
+        let id = *d.selection.shapes.first()?;
+        let sh = d.shape(id)?;
+        let x = sh.xfrm?;
+        let ss = x.w.min(x.h).max(0.0);
+        let own = match &sh.geom {
+            deckcraft_model::Geom::Preset { name, adj } if name == "roundRect" => {
+                Some(ss * adj.first().copied().unwrap_or(16667.0).clamp(0.0, 50000.0) / 100000.0)
+            }
+            deckcraft_model::Geom::Preset { name, .. } if name == "rect" => Some(ss * 16667.0 / 100000.0),
+            _ => None,
+        };
+        Some((id, own))
+    }) else {
+        return;
+    };
+    let key = egui::Id::new(("deckcraft-smooth-corners", id.0));
+    let mut state: (f64, f64) = ui.data(|d| d.get_temp(key)).unwrap_or((radius.unwrap_or(0.0), 0.0));
+    if let Some(r) = radius {
+        state.0 = r;
+    }
+    let usable = radius.is_some() || ui.data(|d| d.get_temp::<(f64, f64)>(key)).is_some();
+    ui.horizontal(|ui| {
+        ui.label("Smooth Corners");
+        let mut pct = state.1;
+        let resp = ui.add_enabled(usable, egui::Slider::new(&mut pct, 0.0..=100.0).suffix("%").integer());
+        let resp = if usable { resp } else { resp.on_disabled_hover_text("For rectangles and rounded rectangles") };
+        if resp.changed() {
+            state.1 = pct;
+            ui.data_mut(|d| d.insert_temp(key, state));
+        }
+        // One undo step per adjustment: apply when the drag ends (or on a click / keyboard step).
+        if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
+            run(app, "shape.smoothCorners", json!({"smoothing": state.1, "radius": state.0}));
+        }
+    });
+}
