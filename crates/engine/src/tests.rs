@@ -105,13 +105,45 @@ fn editing_text_refits_a_saved_shrink() {
     s.edit(|doc, sel| {
         let shapes = crate::shapes_mut(doc, sel).unwrap();
         let sh = deckcraft_model::find_shape_mut(shapes, title).unwrap();
-        sh.text.as_mut().unwrap().body.autofit = Some(AutoFit::Shrink { font_scale: 0.5, line_reduction: 0.2 });
+        sh.text.as_mut().unwrap().body.autofit = Some(AutoFit::Shrink { font_scale: Some(0.5), line_reduction: 0.2 });
         Ok(())
     })
     .unwrap();
     s.execute("text.insert", &json!({"text": "!"})).unwrap();
     let sh = s.doc().unwrap().shape(title).cloned().unwrap();
-    assert_eq!(sh.text.unwrap().body.autofit, Some(AutoFit::Shrink { font_scale: 1.0, line_reduction: 0.0 }));
+    assert_eq!(sh.text.unwrap().body.autofit, Some(AutoFit::Shrink { font_scale: Some(1.0), line_reduction: 0.0 }));
+}
+
+/// After an edit, the shrink-on-overflow scale the layout computes is stored, so the saved file
+/// carries the scale DeckCraft draws instead of a bare normAutofit (#724).
+#[test]
+fn editing_shrink_text_stores_the_layout_scale() {
+    use deckcraft_model::text::AutoFit;
+    let mut s = session();
+    let r = s.execute("shape.insert", &json!({"preset": "rect", "rect": [80.0, 80.0, 200.0, 40.0]})).unwrap();
+    let id = deckcraft_model::ShapeId(r["id"].as_u64().unwrap() as u32);
+    s.execute("format.autofit", &json!({"mode": "shrink"})).unwrap();
+    let text = (0..12).map(|i| format!("Line {i}")).collect::<Vec<_>>().join("\n");
+    s.execute("text.set", &json!({"id": id.0, "text": text})).unwrap();
+    let sh = s.doc().unwrap().shape(id).cloned().unwrap();
+    let Some(AutoFit::Shrink { font_scale, line_reduction }) = sh.text.unwrap().body.autofit else { panic!("shrink") };
+    assert!(font_scale.is_some_and(|s| s < 1.0), "the computed fit is stored: {font_scale:?} / {line_reduction}");
+    // The saved file must carry the scale DeckCraft draws, so PowerPoint opens it the same way.
+    let bytes = deckcraft_pptx::export(&s.doc().unwrap().doc).unwrap();
+    let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut z.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml).unwrap();
+    let scales: Vec<i64> = xml.split("fontScale=\"").skip(1).filter_map(|s| s.split('"').next()?.parse().ok()).collect();
+    assert!(scales.iter().any(|v| *v < 100_000), "the fitted scale is saved: {scales:?}");
+    // Undo restores the state before the edit, and redo brings the stored fit back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let sh = s.doc().unwrap().shape(id).cloned().unwrap();
+    let Some(AutoFit::Shrink { font_scale, .. }) = sh.text.unwrap().body.autofit else { panic!("shrink") };
+    assert_eq!(font_scale, Some(1.0), "undo restores the scale the edit started from");
+    s.execute("edit.redo", &json!({})).unwrap();
+    let sh = s.doc().unwrap().shape(id).cloned().unwrap();
+    let Some(AutoFit::Shrink { font_scale, .. }) = sh.text.unwrap().body.autofit else { panic!("shrink") };
+    assert!(font_scale.is_some_and(|v| v < 1.0), "redo brings the stored fit back: {font_scale:?}");
 }
 
 #[test]
@@ -1069,7 +1101,9 @@ fn an_embedded_face_is_used_when_the_machine_lacks_it() {
     let mut body = deckcraft_model::text::TextBody::from_text("Hello");
     body.paragraphs[0].runs[0].props.font = Some("DeckCraft Colr Squares".into());
     slide.shapes[0].text = Some(body);
-    let id = p.add_media("font1.fntdata", "application/x-fontdata", include_bytes!("../../render/tests/fixtures/colr-squares.ttf").to_vec());
+    let id = p
+        .add_media("font1.fntdata", "application/x-fontdata", include_bytes!("../../render/tests/fixtures/colr-squares.ttf").to_vec())
+        .expect("media");
     p.embedded_fonts.push(deckcraft_model::EmbeddedFont { typeface: "DeckCraft Colr Squares".into(), regular: Some(id), ..Default::default() });
     let data = crate::cmd::base64_encode(&crate::cmd::file::save_bytes(&p, "pptx").unwrap());
     let mut s = Session::with_new();
@@ -1423,6 +1457,41 @@ fn slide_ranges_parse_like_powerpoints_print_box() {
     assert_eq!(opts.slides, Some(vec![0, 1]), "indices past the end are dropped");
 }
 
+/// #725: a layout with a small body placeholder ahead of its content placeholder (as Keynote
+/// exports "Title & Bullets") still gets the body in the content placeholder (`idx="1"`).
+#[test]
+fn new_slide_body_goes_to_the_content_placeholder() {
+    for before in [true, false] {
+        let mut s = session();
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let id = deckcraft_model::ShapeId(doc.alloc_id().expect("id"));
+        let lay = std::sync::Arc::make_mut(&mut doc.masters[0])
+            .layouts
+            .iter_mut()
+            .find(|l| l.kind == deckcraft_model::LayoutType::TitleAndContent)
+            .unwrap();
+        let at = lay.shapes.iter().position(|x| x.ph.as_ref().is_some_and(|p| p.idx == 1)).unwrap();
+        let mut small = lay.shapes[at].clone();
+        small.id = id;
+        small.name = "Subtitle 21".into();
+        let ph = small.ph.as_mut().unwrap();
+        ph.kind = deckcraft_model::PhType::Body;
+        ph.idx = 21;
+        ph.size = Some("quarter".into());
+        lay.shapes.insert(if before { at } else { at + 1 }, small);
+
+        s.execute("slide.new", &json!({"layout": "titleAndContent", "title": "T", "body": "Line one\nLine two"})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        let slide = &doc.slides[doc.slides.len() - 1];
+        let text = |idx: u32| {
+            let sh = slide.shapes.iter().find(|x| x.ph.as_ref().is_some_and(|p| p.idx == idx)).unwrap();
+            sh.text.as_ref().map(|t| t.text()).unwrap_or_default()
+        };
+        assert_eq!(text(1), "Line one\nLine two", "before = {before}");
+        assert_eq!(text(21), "", "before = {before}");
+    }
+}
+
 #[test]
 fn cell_fill_walks_only_the_cells_a_huge_selection_covers() {
     // A selection may reach far past the table; filling it touches the real cells and nothing more.
@@ -1583,8 +1652,8 @@ mod copy_remap {
     fn populate(s: &mut Session, bytes: &[u8]) -> (ShapeId, ShapeId, ShapeId) {
         let st = s.doc_mut().unwrap();
         let doc = Arc::make_mut(&mut st.doc);
-        let media = doc.add_media("p.png", "image/png", bytes.to_vec());
-        let (p, b, c) = (ShapeId(doc.alloc_id()), ShapeId(doc.alloc_id()), ShapeId(doc.alloc_id()));
+        let media = doc.add_media("p.png", "image/png", bytes.to_vec()).expect("media");
+        let (p, b, c) = (ShapeId(doc.alloc_id().expect("id")), ShapeId(doc.alloc_id().expect("id")), ShapeId(doc.alloc_id().expect("id")));
         let x = Some(Xfrm::new(10.0, 10.0, 50.0, 50.0));
         let slide = Arc::make_mut(&mut doc.slides[0]);
         slide.shapes.push(Shape {
@@ -3460,4 +3529,31 @@ fn every_command_id_is_registered_once() {
     let mut seen = std::collections::HashSet::new();
     let dups: Vec<&str> = crate::command_specs().iter().map(|c| c.id).filter(|id| !seen.insert(*id)).collect();
     assert!(dups.is_empty(), "registered more than once: {dups:?}");
+}
+
+/// A deck whose ids are used up (a hostile file can arrive with next_id at the top of the
+/// range) refuses to grow instead of handing out duplicate ids (#407).
+#[test]
+fn an_exhausted_id_space_refuses_growth() {
+    let mut s = session();
+    s.execute("slide.new", &json!({})).unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).next_id = u32::MAX;
+    let before = s.doc().unwrap().doc.clone();
+    assert!(s.execute("slide.new", &json!({})).is_err(), "a new slide is refused");
+    assert!(s.execute("shape.insert", &json!({"preset": "rect", "rect": [10, 10, 100, 50]})).is_err());
+    assert!(s.execute("slide.duplicate", &json!({})).is_err());
+    assert!(s.execute("edit.duplicate", &json!({})).is_err());
+    assert!(s.execute("insert.smartArt", &json!({"kind": "blockList", "items": ["Plan", "Build"]})).is_err());
+    assert!(s.execute("insert.textBox", &json!({"text": "Hi"})).is_err());
+    // What the deck holds is untouched: same slides, same ids, no duplicates.
+    let after = s.doc().unwrap().doc.clone();
+    assert_eq!(after.slides.len(), before.slides.len());
+    let mut ids = vec![];
+    deckcraft_model::walk(&after.slides[0].shapes, &mut |sh, _| ids.push(sh.id.0));
+    ids.push(after.slides[0].id.0);
+    ids.push(after.next_id);
+    let mut sorted = ids.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), ids.len(), "no id repeats");
 }

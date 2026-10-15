@@ -134,6 +134,9 @@ app's JSON control channel (`deckcraft --control PORT`).
 
 | Date | What landed |
 |---|---|
+| 2026-10-15 | PDF export and rendering: `anchorCtr` centres the drawn text block — right-aligned text no longer ran past the box edge (#736) |
+| 2026-10-14 | connected MCP rejects unrelated, malformed, incomplete and oversized replies without replay; buffered unsolicited bytes force a fresh connection before sending (#718) |
+| 2026-10-14 | Empty bulleted and numbered paragraphs show gray markers while editing, including on first click and after Enter. Markers use the list style and stay out of slide shows and exports. |
 | 2026-10-13 | Eyedropper: Shape Fill, Shape Outline, Font Color and every other colour menu end with an Eyedropper that takes the colour drawn at a point of the slide (hover shows it, a click applies it, Esc cancels); `slide.colorAt` gives the same from scripts and MCP (#367) |
 | 2026-10-13 | Slide show: Honeycomb's hexagons cover the whole slide again — the bottom quarter stayed black until the endpoint (#420) |
 | 2026-10-13 | Copy and Cut from the ribbon, the slide's right-click menu and the menus put the text on the system clipboard, as Ctrl+C and Ctrl+X do (#431) |
@@ -191,6 +194,7 @@ app's JSON control channel (`deckcraft --control PORT`).
 | 2026-10-13 | WordArt adjust handles: a selected text warp shows one yellow handle per adjust, and dragging it sets that guide value (one undo step) |
 | 2026-10-14 | Draw: pen pressure scales ink width when the pointer reports it (a mouse or a missing reading stays at the pen width; a stroke saved as a flat 0.5 still draws at the pen width). Tilt is not read |
 | 2026-10-13 | Saving a presentation keeps the embedded workbook behind an unchanged chart, and the chart part's relationships (#335). Editing the chart drops that workbook instead of writing numbers that no longer match it |
+| 2026-10-13 | A presentation whose object ids are used up refuses to grow instead of handing out duplicate ids (#407) |
 | 2026-10-13 | Slide transitions like PowerPoint: every transition and option measured frame by frame against PowerPoint's video export and retuned (curves, directions, soft edges, 3-D perspective, contents moving over backgrounds); PowerPoint's own XML elements and defaults read and written (diagonal Wipe, Zoom, Shape In/Out, Glitter Hexagons, Shred In/Out, Page Curl Single); `deckcraft-cli render-transition` renders frames headless |
 | 2026-10-13 | Wild text cases measured against PowerPoint (102 synthetic slides): bidi by run language, East Asian vertical text upright, mongolianVert/wordArtVert/wordArtVertRtl, underline styles and strikethrough at the font's metrics, centre/right/decimal tabs, East Asian, Thai, Hindi, Arabic and Hebrew numbering, small caps, all-caps "ß", transparent text, soft hyphens, kinsoku, rtlCol and just/dist anchoring, emoji presentation, fallback faces that no longer move the baseline |
 | 2026-10-13 | Render matches PowerPoint more closely on wild shape, picture and table cases: even-odd custom paths, dashes and caps, arrowheads, radial and path gradients, tile rects, rotWithShape, gradient lines, shadows cast by what is drawn (group and perspective too), group fill, picture borders, tiles, reflection, recolour (biLevel, alphaInv, brightness/contrast), table borders and grid default, 20+ preset shapes by their ECMA formulas, default miter joins, and approximate 3-D bevels, cameras and face lighting |
@@ -224,6 +228,8 @@ app's JSON control channel (`deckcraft --control PORT`).
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | trivial | remote MCP checks reply IDs, envelopes and bounded newline framing (#718) |
+| 2026-10-14 | minor | Gray list markers on empty paragraphs while editing; caret keeps the list indent before typing |
 | 2026-10-14 | minor | Community PR wave folded: headline breadth 84% over 191 features (P0 92%, P1 82%, P2 55%) and the feature-area breadths from `cargo xtask parity`; one row per area; Upcoming item 2 merged; per-PR count notes dropped from the progress log. Ready stays ~55%, stage alpha |
 | 2026-10-13 | trivial | Progress log: Eyedropper in the colour menus, slide.colorAt (#367) |
 | 2026-10-13 | trivial | Progress log: video seek frame-loss race and regression coverage |
