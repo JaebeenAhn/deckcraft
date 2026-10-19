@@ -19,6 +19,16 @@ pub enum Language {
 impl Language {
     pub const ALL: [Self; 4] = [Self::System, Self::En, Self::Uk, Self::Pl];
 
+    /// The `app.language` value for this choice.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::En => "en",
+            Self::Uk => "uk",
+            Self::Pl => "pl",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::System => tr("System language"),

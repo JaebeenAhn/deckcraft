@@ -400,7 +400,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.about", "About DeckCraft", None, "{}"),
     ("app.palette", "Command Palette", Some("Cmd+Shift+P"), "{}"),
     ("app.preferences", "Preferences…", Some("Cmd+,"), "{}"),
-    ("app.language", "Interface Language", None, "{language: system|en|uk}"),
+    ("app.language", "Interface Language", None, "{language: system|en|uk|pl}"),
     ("app.openDialog", "Open…", None, "{purpose?}"),
     ("app.insertPictureDialog", "Picture from File…", None, "{}"),
     ("app.smartArtPictureDialog", "Insert Picture in SmartArt…", None, "{id?, index}"),
@@ -2658,6 +2658,31 @@ mod tests {
 
     /// Preferences (#752): Cancel, Esc and the window's close button put back what the dialog
     /// changed while it was open; Done keeps it.
+    #[test]
+    fn preferences_cancel_restores_the_interface_language() {
+        let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(
+            |ui, app: &mut SlideApp| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            },
+            SlideApp::new(Session::with_new(), Services::default()),
+        );
+        harness.run_steps(2);
+        let before = harness.state().ui.interface_language;
+        harness.state_mut().run("app.preferences", json!({})).unwrap();
+        harness.run_steps(2);
+        // The language list applies a choice at once, as the other Preferences controls do.
+        harness.state_mut().run("app.language", json!({"language": "pl"})).unwrap();
+        harness.run_steps(2);
+        assert_eq!(harness.state().ui.interface_language, i18n::Language::Pl);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        let s = harness.state_mut();
+        assert!(s.dialog.is_none(), "Esc closes Preferences");
+        assert_eq!(s.ui.interface_language, before, "Esc restores the interface language");
+        let _ = s.run("app.language", json!({"language": "en"}));
+    }
+
     #[test]
     fn preferences_cancel_restores_the_settings_done_keeps_them() {
         use egui_kittest::kittest::Queryable;

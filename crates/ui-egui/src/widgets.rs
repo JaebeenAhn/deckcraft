@@ -69,7 +69,7 @@ pub fn big_button_ex(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, split:
         let label_w = ui.fonts_mut(|f| f.layout_no_wrap(l.to_string(), font.clone(), col).size().x);
         let extra = if split && last { 9.0 } else { 0.0 };
         let x = rect.center().x - (label_w + extra) / 2.0;
-        painter.text(pos2(x, y), Align2::LEFT_TOP, crate::i18n::tr(l), font.clone(), col);
+        painter.text(pos2(x, y), Align2::LEFT_TOP, *l, font.clone(), col);
         if split && last {
             chevron(&painter, pos2(x + label_w + 5.0, y + 7.0), 3.0, col);
         }
@@ -146,13 +146,7 @@ pub fn small_button_ex(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, sele
     }
     icons::paint(&painter, Rect::from_center_size(pos2(rect.min.x + 12.0, rect.center().y), vec2(17.0, 17.0)), icon, t.text, !enabled);
     if !label.is_empty() {
-        painter.text(
-            pos2(rect.min.x + 24.0, rect.center().y),
-            Align2::LEFT_CENTER,
-            crate::i18n::tr(label),
-            font,
-            if enabled { t.text } else { t.text_faint },
-        );
+        painter.text(pos2(rect.min.x + 24.0, rect.center().y), Align2::LEFT_CENTER, label, font, if enabled { t.text } else { t.text_faint });
     }
     if split {
         chevron(&painter, pos2(rect.max.x - 6.0, rect.center().y), 2.8, t.text_dim);

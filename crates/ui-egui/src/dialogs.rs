@@ -147,6 +147,7 @@ fn preferences_snapshot(app: &SlideApp) -> Value {
     json!({
         "dark": app.ui.brightness == theme::Brightness::Dark,
         "uiScale": app.ui.ui_scale,
+        "language": app.ui.interface_language.code(),
         "prefs": serde_json::to_value(&app.session.prefs).unwrap_or(Value::Null),
     })
 }
@@ -161,6 +162,11 @@ fn restore_preferences(app: &mut SlideApp, d: &Dialog) {
     }
     if let Some(scale) = before.get("uiScale").and_then(Value::as_f64) {
         app.ui.ui_scale = scale as f32;
+    }
+    if let Some(code) = before.get("language").and_then(Value::as_str)
+        && code != app.ui.interface_language.code()
+    {
+        let _ = app.run("app.language", json!({ "language": code }));
     }
     if let Some(prefs) = before.get("prefs").and_then(|p| serde_json::from_value(p.clone()).ok()) {
         app.session.prefs = prefs;
@@ -2190,13 +2196,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 egui::ComboBox::from_id_salt("interface_language").selected_text(app.ui.interface_language.label()).show_ui(ui, |ui| {
                     for language in crate::i18n::Language::ALL {
                         if ui.selectable_label(app.ui.interface_language == language, crate::i18n::tr(language.label())).clicked() {
-                            let code = match language {
-                                crate::i18n::Language::System => "system",
-                                crate::i18n::Language::En => "en",
-                                crate::i18n::Language::Uk => "uk",
-                                crate::i18n::Language::Pl => "pl",
-                            };
-                            let _ = app.run("app.language", json!({"language": code}));
+                            let _ = app.run("app.language", json!({"language": language.code()}));
                         }
                     }
                 });
