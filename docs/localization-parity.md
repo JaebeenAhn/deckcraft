@@ -2,7 +2,8 @@
 
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Polish UI catalog; previous: minor, IME composition underlined in table cells; previous: minor, IME composition and CJK interface text, #101; previous: major, created) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 
-DeckCraft's interface supports English and Ukrainian through `crates/ui-egui/src/i18n/uk.tsv`.
+DeckCraft's interface supports English, Ukrainian and Polish through `crates/ui-egui/src/i18n/uk.tsv`
+and `crates/ui-egui/src/i18n/pl.tsv`.
 Preferences offers the system language or an explicit choice; desktop choices persist across
 restarts. Menus, ribbon, command palette, panels, dialogs and presenter controls are translated,
 with English fallback. Presentation content, custom placeholder prompts and command IDs keep

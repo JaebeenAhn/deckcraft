@@ -84,8 +84,9 @@ EMF/SVG pictures, the data-loss and startup-crash bugs (#60, #40, #59) and the b
 
 ## Languages
 
-English and Ukrainian: Preferences offers System language, English and Українська. Ukrainian
-OS/browser locales select Ukrainian automatically; explicit desktop choices persist in `ui.json`.
+English, Ukrainian and Polish: Preferences offers System language, English, Українська and Polski.
+Ukrainian and Polish OS/browser locales select those languages automatically; explicit desktop
+choices persist in `ui.json`.
 Menus, ribbon, command palette, panels, dialogs and presenter controls use the interface catalog.
 Presentation content and command IDs retain their original values. Detail:
 [docs/localization-parity.md](docs/localization-parity.md).
