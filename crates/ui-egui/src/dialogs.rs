@@ -222,6 +222,34 @@ fn check(ui: &mut Ui, d: &mut Dialog, label: &str, key: &str, default: bool) -> 
     v
 }
 
+/// A Slide Size field set to `pt`: two decimals of the unit shown, the exact points kept beside.
+fn put_slide_dim(d: &mut Dialog, key: &str, pt: f64, ppu: f64) {
+    d.fields.insert(key.into(), format!("{:.2}", pt / ppu));
+    d.fields.insert(format!("{key}Pt"), pt.to_string());
+}
+
+/// A Slide Size field in points: the exact value while the text is still its rendering, else
+/// the number typed (`default` when it is not one).
+fn slide_dim_points(d: &Dialog, key: &str, ppu: f64, default: f64) -> f64 {
+    let text = field_of(d, key);
+    if let Some(pt) = exact_of(d, key)
+        && text == format!("{:.2}", pt / ppu)
+    {
+        return pt;
+    }
+    text.trim().trim_end_matches(['"', '%', ' ']).parse::<f64>().ok().filter(|v| v.is_finite()).map_or(default, |v| v * ppu)
+}
+
+/// The unit's abbreviation in a field label, "Width (cm):".
+fn unit_abbr(unit: deckcraft_geom::Unit) -> &'static str {
+    match unit {
+        deckcraft_geom::Unit::Inches => "in",
+        deckcraft_geom::Unit::Centimeters => "cm",
+        deckcraft_geom::Unit::Points => "pt",
+        deckcraft_geom::Unit::Pixels => "px",
+    }
+}
+
 fn num(d: &mut Dialog, key: &str, default: f64) -> f64 {
     d.get(key, "").trim().trim_end_matches(['"', '%', ' ']).parse::<f64>().ok().filter(|v| v.is_finite()).unwrap_or(default)
 }
@@ -1081,6 +1109,15 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         }
         "slideSize" => {
             let cur = app.session.active().map(|s| s.doc.slide_size).unwrap_or(deckcraft_model::defaults::WIDE);
+            let len = app.session.prefs.units;
+            let ppu = len.points_per_unit();
+            // Each field keeps its exact size in points (`wPt`) beside the two decimals shown, so
+            // a preset, Portrait or an untouched field is not nudged off by the rounding (13.33",
+            // 33.87 cm read back would make the slide 959.76 or 960.09 pt wide).
+            if !d.fields.contains_key("wPt") {
+                put_slide_dim(d, "w", cur.width, ppu);
+                put_slide_dim(d, "h", cur.height, ppu);
+            }
             let label = ui.label(crate::i18n::tr("Slides sized for:"));
             let preset = d.get("preset", "");
             let combo = egui::ComboBox::from_id_salt("sizes")
@@ -1089,29 +1126,31 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     for (label, w, h) in deckcraft_model::defaults::SLIDE_SIZES {
                         if ui.selectable_label(preset == *label, crate::i18n::tr(label)).clicked() {
                             d.fields.insert("preset".into(), label.to_string());
-                            d.fields.insert("w".into(), format!("{:.2}", w / 72.0));
-                            d.fields.insert("h".into(), format!("{:.2}", h / 72.0));
+                            put_slide_dim(d, "w", *w, ppu);
+                            put_slide_dim(d, "h", *h, ppu);
                         }
                     }
                 });
             let _ = combo.response.labelled_by(label.id);
-            field(ui, d, "Width (in):", "w", &format!("{:.2}", cur.width / 72.0));
-            field(ui, d, "Height (in):", "h", &format!("{:.2}", cur.height / 72.0));
-            let (w, h) = (num(d, "w", cur.width / 72.0), num(d, "h", cur.height / 72.0));
+            let abbr = unit_abbr(len);
+            let (w_seed, h_seed) = (field_of(d, "w"), field_of(d, "h"));
+            field(ui, d, &format!("Width ({abbr}):"), "w", &w_seed);
+            field(ui, d, &format!("Height ({abbr}):"), "h", &h_seed);
+            let (w, h) = (slide_dim_points(d, "w", ppu, cur.width), slide_dim_points(d, "h", ppu, cur.height));
             ui.horizontal(|ui| {
                 ui.label("Orientation:");
                 let portrait = ui.radio(h > w, "Portrait").clicked();
                 let landscape = ui.radio(w >= h, "Landscape").clicked();
                 // Picking the other orientation swaps the width and height fields.
                 if portrait && w > h || landscape && h > w {
-                    d.fields.insert("w".into(), format!("{h:.2}"));
-                    d.fields.insert("h".into(), format!("{w:.2}"));
+                    put_slide_dim(d, "w", h, ppu);
+                    put_slide_dim(d, "h", w, ppu);
                 }
             });
             let maximize = check(ui, d, "Maximize content (else ensure fit)", "max", false);
             let (ok, cancel) = buttons(ui, "OK");
             if ok {
-                let (w, h) = (num(d, "w", cur.width / 72.0) * 72.0, num(d, "h", cur.height / 72.0) * 72.0);
+                let (w, h) = (slide_dim_points(d, "w", ppu, cur.width), slide_dim_points(d, "h", ppu, cur.height));
                 run(app, "design.slideSize", json!({"w": w, "h": h, "scale": if maximize { "maximize" } else { "ensureFit" }}));
             }
             ok || cancel
@@ -1670,9 +1709,11 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     app.set_status("Tick at least one slide to insert".to_string());
                     return false;
                 }
-                app.reuse_slides(&path, keep, &picked);
+                // A failed insert keeps the dialog (and the ticked slides) open; the error is in the status bar.
+                let source = d.params.get("source").cloned().unwrap_or_default();
+                return app.reuse_slides(&source, keep, &picked);
             }
-            ok || cancel
+            cancel
         }
         "renameSection" | "renameShape" | "renameLayout" => {
             let cur = d.params.get("name").and_then(Value::as_str).unwrap_or("").to_string();
@@ -2085,7 +2126,21 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let (cur, np) = selected_language(app);
             let lang = d.get("lang", &cur);
             let mut no_proof = d.get("noProof", if np { "1" } else { "" }) == "1";
-            ui.label(crate::i18n::tr("Mark selected text as:"));
+            // The selected text, or every text in the presentation (all there is with nothing selected).
+            let has_sel = deckcraft_engine::cmd::has_text_or_shapes(&app.session).is_ok();
+            let mut all = !has_sel || d.get("scope", "") == "all";
+            ui.horizontal(|ui| {
+                ui.label(crate::i18n::tr("Apply to:"));
+                if ui.add_enabled(has_sel, egui::RadioButton::new(!all, crate::i18n::tr("Selected text"))).clicked() {
+                    d.fields.insert("scope".into(), "sel".into());
+                    all = false;
+                }
+                if ui.radio(all, crate::i18n::tr("Whole presentation")).clicked() {
+                    d.fields.insert("scope".into(), "all".into());
+                    all = true;
+                }
+            });
+            ui.label(crate::i18n::tr(if all { "Mark all text in the presentation as:" } else { "Mark selected text as:" }));
             egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                 // The selection's own language first when the list doesn't have it.
                 let own = (!crate::squiggles::LANGS.iter().any(|(_, t)| t.eq_ignore_ascii_case(&cur))).then(|| (cur.clone(), cur.clone()));
@@ -2110,7 +2165,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let (ok, cancel) = buttons(ui, "OK");
             if ok {
                 let lang = d.get("lang", &cur);
-                run(app, "format.language", json!({"lang": lang, "noProof": no_proof}));
+                run(app, if all { "format.languageAll" } else { "format.language" }, json!({"lang": lang, "noProof": no_proof}));
             }
             ok || cancel
         }
@@ -2357,6 +2412,13 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 }
                 d.fields.remove("uiScale");
             }
+            // PowerPoint takes the unit from the system's measurement setting; DeckCraft asks here.
+            ui.horizontal(|ui| {
+                ui.label(crate::i18n::tr("Measurement units:"));
+                let units = &mut app.session.prefs.units;
+                ui.radio_value(units, deckcraft_geom::Unit::Inches, crate::i18n::tr("Inches"));
+                ui.radio_value(units, deckcraft_geom::Unit::Centimeters, crate::i18n::tr("Centimeters"));
+            });
             ui.label(egui::RichText::new(crate::i18n::tr("Editing")).font(theme::bold(13.0)));
             ui.checkbox(&mut app.session.prefs.smart_guides, crate::i18n::tr("Show smart guides"));
             ui.checkbox(&mut app.session.prefs.snap_to_grid, crate::i18n::tr("Snap objects to grid"));

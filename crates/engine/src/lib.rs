@@ -155,6 +155,11 @@ pub struct Selection {
     pub text: Option<TextSel>,
     /// Selected table cells: (table, (r0, c0), (r1, c1)).
     pub cells: Option<(ShapeId, (usize, usize), (usize, usize))>,
+    /// Slide-list range last made with Shift-click: `(anchor, end)`. A further Shift-click extends from
+    /// the anchor while the current slide is still `end`; moving to another slide drops it. Held as
+    /// slide ids, so moving, inserting or deleting slides can't make it name other slides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range_anchor: Option<(SlideId, SlideId)>,
     pub target: Target,
 }
 
@@ -353,6 +358,9 @@ pub struct Prefs {
     pub undo_limit: usize,
     /// Minutes between AutoRecover saves of unsaved presentations.
     pub recovery_minutes: f64,
+    /// The unit the rulers, the Format pane and the size dialogs show (Preferences); the deck
+    /// itself always stores points.
+    pub units: deckcraft_geom::Unit,
 }
 
 impl Default for Prefs {
@@ -376,6 +384,7 @@ impl Default for Prefs {
             author: "Presenter".into(),
             undo_limit: 500,
             recovery_minutes: 1.0,
+            units: deckcraft_geom::Unit::Inches,
         }
     }
 }
