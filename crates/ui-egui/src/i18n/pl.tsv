@@ -1473,3 +1473,7 @@ Reject Revision	Odrzuć poprawkę
 Duration	Czas trwania
 Delay	Opóźnienie
 Delete Surrounding Text	Usuń otaczający tekst
+{} options	{} — opcje
+Missing slide title	Brak tytułu slajdu
+Missing alternative text	Brak tekstu alternatywnego
+Hard-to-read text contrast ({}:1)	Słabo czytelny kontrast tekstu ({}:1)

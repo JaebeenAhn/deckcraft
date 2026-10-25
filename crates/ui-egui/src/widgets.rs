@@ -175,7 +175,7 @@ pub fn small_button_named(
     if split {
         main_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, name));
         if let Some(a) = &arrow_resp {
-            a.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, format!("{name} options")));
+            a.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, crate::i18n::format("{} options", &[name.to_string()])));
         }
     }
     if let Some(c) = bg(ui, &main_resp, selected, &t) {
@@ -280,6 +280,8 @@ pub fn icon_toggle(ui: &mut Ui, icon: Icon, tip: &str, enabled: bool, on: bool) 
 
 /// Icon with a colour bar under it and a dropdown arrow (Font Color, Highlight, Shape Fill…).
 pub fn color_split(ui: &mut Ui, icon: Icon, tip: &str, color: Color32, enabled: bool) -> (Response, Response) {
+    // The accessible names and the tooltip, in the interface language.
+    let tip = crate::i18n::tr(tip);
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(34.0, 22.0), Sense::hover());
     let main = ui.interact(Rect::from_min_size(rect.min, vec2(23.0, 22.0)), resp.id.with("m"), if enabled { Sense::click() } else { Sense::hover() });
@@ -289,7 +291,7 @@ pub fn color_split(ui: &mut Ui, icon: Icon, tip: &str, color: Color32, enabled: 
         resp.id.with("a"),
         if enabled { Sense::click() } else { Sense::hover() },
     );
-    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, format!("{tip} options")));
+    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, crate::i18n::format("{} options", &[tip.to_string()])));
     let painter = ui.painter_at(rect);
     if let Some(c) = bg(ui, &main, false, &t) {
         painter.rect_filled(main.rect, CornerRadius::same(4), c);
@@ -304,7 +306,7 @@ pub fn color_split(ui: &mut Ui, icon: Icon, tip: &str, color: Color32, enabled: 
         if enabled { color } else { t.text_faint },
     );
     chevron(&painter, pos2(rect.max.x - 5.5, rect.center().y), 2.6, t.text_dim);
-    (main.on_hover_text(crate::i18n::tr(tip)), arrow)
+    (main.on_hover_text(tip), arrow)
 }
 
 /// A ribbon group: contents, then a thin vertical separator.

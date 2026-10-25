@@ -2064,7 +2064,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                             "Slide {}: {}{}",
                             &[
                                 (item.get("slide").and_then(Value::as_u64).unwrap_or(0) + 1).to_string(),
-                                (item.get("issue").and_then(Value::as_str).unwrap_or("")).to_string(),
+                                issue_text(item.get("issue").and_then(Value::as_str).unwrap_or("")),
                                 (item.get("name").and_then(Value::as_str).map(|n| format!(" — {n}")).unwrap_or_default()).to_string(),
                             ],
                         ));
@@ -3530,6 +3530,19 @@ fn find_dialog(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     close
 }
 
+/// An accessibility checker finding in the interface language. The engine reports them in
+/// English (`review.accessibility` is a command, so its output stays stable); the known ones are
+/// translated here, the contrast one with its ratio kept, and any other is shown as it came.
+fn issue_text(issue: &str) -> String {
+    if let Some(ratio) = issue.strip_prefix("Hard-to-read text contrast (").and_then(|r| r.strip_suffix(":1)")) {
+        return crate::i18n::format("Hard-to-read text contrast ({}:1)", &[ratio.to_string()]);
+    }
+    match issue {
+        "Missing slide title" | "Missing alternative text" => crate::i18n::tr(issue).to_string(),
+        other => other.to_string(),
+    }
+}
+
 #[cfg(test)]
 #[path = "font_dialog_tests.rs"]
 mod font_dialog_tests;
@@ -4056,3 +4069,22 @@ mod about_credits_tests {
 #[cfg(test)]
 #[path = "preferences_tests.rs"]
 mod preferences_tests;
+
+#[cfg(test)]
+mod issue_text_tests {
+    use crate::i18n::{Language, set_current};
+
+    /// The checker's findings read in the interface language, the contrast ratio kept; an unknown
+    /// finding is shown as the engine wrote it.
+    #[test]
+    fn accessibility_findings_follow_the_interface_language() {
+        set_current(Language::Pl);
+        assert_eq!(super::issue_text("Missing slide title"), "Brak tytułu slajdu");
+        assert_eq!(super::issue_text("Hard-to-read text contrast (2.3:1)"), "Słabo czytelny kontrast tekstu (2.3:1)");
+        assert_eq!(super::issue_text("Something new"), "Something new");
+        set_current(Language::Uk);
+        assert_eq!(super::issue_text("Missing alternative text"), "Немає замінного тексту");
+        set_current(Language::En);
+        assert_eq!(super::issue_text("Hard-to-read text contrast (2.3:1)"), "Hard-to-read text contrast (2.3:1)");
+    }
+}

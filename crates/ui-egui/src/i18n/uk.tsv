@@ -1472,3 +1472,7 @@ Reject Revision	Відхилити виправлення
 Duration	Тривалість
 Delay	Затримка
 Delete Surrounding Text	Видалити навколишній текст
+{} options	{} — параметри
+Missing slide title	Немає заголовка слайда
+Missing alternative text	Немає замінного тексту
+Hard-to-read text contrast ({}:1)	Важкочитний контраст тексту ({}:1)
