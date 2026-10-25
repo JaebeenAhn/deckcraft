@@ -1469,3 +1469,6 @@ Segment Type	Тип сегмента
 Open Path	Розімкнути контур
 Close Path	Замкнути контур
 Reject Revision	Відхилити виправлення
+Duration	Тривалість
+Delay	Затримка
+Delete Surrounding Text	Видалити навколишній текст
