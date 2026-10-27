@@ -1,7 +1,7 @@
 //! The browser shell: web `Services`, drag-and-drop, and the eframe web runner.
 
 use deckcraft_engine::Session;
-use deckcraft_ui_egui::{Inbox, InboxEvent, InboxFile, Services, SlideApp};
+use deckcraft_ui_egui::{Inbox, Services, SlideApp};
 use wasm_bindgen::JsCast as _;
 
 const PRESENTATION_EXTS: &[&str] = &["deckcraft", "pptx", "potx", "ppsx", "txt", "md"];
@@ -11,8 +11,6 @@ const VIDEO_EXTS: &[&str] = &["mp4", "m4v", "mov", "webm"];
 const CANVAS_ID: &str = "deckcraft_canvas";
 const LOADING_ID: &str = "deckcraft_loading";
 
-/// Start the browser shell: install logging, locate the canvas, launch the eframe runner,
-/// build the sample or blank deck, and replace the loading element when launch finishes.
 pub fn start() {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
     wasm_bindgen_futures::spawn_local(async {
@@ -38,9 +36,9 @@ pub fn start() {
                     if let Some(rs) = &cc.wgpu_render_state {
                         log::info!("deckcraft-web {}: wgpu backend {:?}", env!("CARGO_PKG_VERSION"), rs.adapter.get_info().backend);
                     }
-                    deckcraft_ui_egui::install_ime_pass_hooks(&cc.egui_ctx);
                     let inbox: Inbox = Inbox::default();
                     let mut app = SlideApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));
+                    app.services.system_locale = web_sys::window().and_then(|w| w.navigator().language());
                     let q = query();
                     if !q.contains("blank") {
                         if let Err(e) = deckcraft_engine::sample::open_sample(&mut app.session) {
@@ -77,36 +75,27 @@ struct WebShell {
 }
 
 impl eframe::App for WebShell {
-    /// Delegate one eframe logic pass to the wrapped application.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.app.logic(ctx);
-    }
-
-    /// Consume browser drops with fresh input, capture the identity before the asynchronous read,
-    /// and deliver the id, name, and bytes through the inbox.
-    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
-        // Browsers cannot read dropped files synchronously. Consume this pass's drops here, with
-        // fresh input, and capture the document/slide before the asynchronous read finishes.
-        for f in std::mem::take(&mut raw.dropped_files) {
-            let id = self.app.begin_external_file("drop");
+        let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
+        for f in dropped {
             let inbox = self.inbox.clone();
             let ctx = ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
                 match f.bytes_async().await {
                     Ok(bytes) => {
-                        push_inbox(&inbox, InboxEvent::File(InboxFile { id, name, bytes }));
+                        inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
                         ctx.request_repaint();
                     }
-                    Err(e) => {
-                        log::error!("couldn't read dropped file {name}: {e}");
-                        push_inbox(&inbox, InboxEvent::Cancelled { id });
-                        ctx.request_repaint();
-                    }
+                    Err(e) => log::error!("couldn't read dropped file {name}: {e}"),
                 }
             });
         }
-        self.app.raw_input_hook(ctx, raw);
+        self.app.logic(ctx);
+    }
+
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        self.app.raw_input_hook(raw);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -119,23 +108,21 @@ impl eframe::App for WebShell {
 fn services(inbox: Inbox, ctx: egui::Context) -> Services {
     let open_inbox = inbox.clone();
     Services {
-        open_async: Some(Box::new(move |purpose: &str, request: u64| {
+        open_async: Some(Box::new(move |purpose: &str| {
             let inbox = open_inbox.clone();
             let ctx = ctx.clone();
             let dialog = match purpose {
-                "picture" => rfd::AsyncFileDialog::new().add_filter("Pictures", PICTURE_EXTS),
-                "audio" => rfd::AsyncFileDialog::new().add_filter("Audio", AUDIO_EXTS),
-                "video" => rfd::AsyncFileDialog::new().add_filter("Video", VIDEO_EXTS),
-                _ => rfd::AsyncFileDialog::new().add_filter("Presentations", PRESENTATION_EXTS),
+                "picture" => rfd::AsyncFileDialog::new().add_filter(deckcraft_ui_egui::i18n::tr("Pictures"), PICTURE_EXTS),
+                "audio" => rfd::AsyncFileDialog::new().add_filter(deckcraft_ui_egui::i18n::tr("Audio"), AUDIO_EXTS),
+                "video" => rfd::AsyncFileDialog::new().add_filter(deckcraft_ui_egui::i18n::tr("Video"), VIDEO_EXTS),
+                _ => rfd::AsyncFileDialog::new().add_filter(deckcraft_ui_egui::i18n::tr("Presentations"), PRESENTATION_EXTS),
             };
             wasm_bindgen_futures::spawn_local(async move {
                 let Some(file) = dialog.pick_file().await else {
-                    push_inbox(&inbox, InboxEvent::Cancelled { id: request });
-                    ctx.request_repaint();
                     return;
                 };
                 let bytes = file.read().await;
-                push_inbox(&inbox, InboxEvent::File(InboxFile { id: request, name: file.file_name(), bytes }));
+                inbox.lock().unwrap_or_else(|e| e.into_inner()).push((file.file_name(), bytes));
                 ctx.request_repaint();
             });
         })),
@@ -148,10 +135,6 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
         inbox: Some(inbox),
         ..Default::default()
     }
-}
-
-fn push_inbox(inbox: &Inbox, event: InboxEvent) {
-    inbox.lock().unwrap_or_else(|e| e.into_inner()).push(event);
 }
 
 /// Trigger a browser download of `bytes` named after the last component of `path`.
@@ -186,7 +169,6 @@ fn mime_for(name: &str) -> &'static str {
         Some("png") => "image/png",
         Some("jpg" | "jpeg") => "image/jpeg",
         Some("pdf") => "application/pdf",
-        Some("gif") => "image/gif",
         Some("txt") => "text/plain",
         Some("pptx") => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         Some("deckcraft") => "application/zip",

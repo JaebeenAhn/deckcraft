@@ -47,8 +47,6 @@ pub const TABLE: &[(&str, Class)] = &[
     ("isobmff", Class::Layer(1)),
     ("media", Class::Layer(2)),
     ("color", Class::Layer(0)),
-    // WMF/EMF reader (ported from WordCraft).
-    ("metafile", Class::Layer(0)),
     ("model", Class::Layer(1)),
     ("fonts", Class::Layer(1)),
     ("text", Class::Layer(2)),
@@ -207,7 +205,7 @@ pub fn check(crates: &[Crate]) -> Vec<Violation> {
             }
         }
     }
-    out.sort_by_key(ToString::to_string);
+    out.sort_by_key(|v| v.to_string());
     out.dedup();
     out
 }

@@ -1,7 +1,6 @@
 //! cpal audio output for media playback: the device pulls mixed samples from the
 //! `deckcraft_media::Player`, which makes it the playback clock video frames follow.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -30,8 +29,6 @@ fn take_stream_error(slot: &ErrorSlot) -> Option<String> {
 pub struct CpalOut {
     stream: Option<cpal::Stream>,
     error: ErrorSlot,
-    /// Set by the realtime error callback when the device went away: the stream is dead.
-    dead: Arc<AtomicBool>,
 }
 
 impl CpalOut {
@@ -59,14 +56,7 @@ impl AudioOut for CpalOut {
         let rate = cfg.sample_rate().0;
         let config: cpal::StreamConfig = cfg.clone().into();
         let slot = self.error.clone();
-        let dead = Arc::new(AtomicBool::new(false));
-        self.dead = dead.clone();
-        let err = move |e: cpal::StreamError| {
-            if matches!(e, cpal::StreamError::DeviceNotAvailable) {
-                dead.store(true, Ordering::Relaxed);
-            }
-            keep_stream_error(&slot, &e);
-        };
+        let err = move |e: cpal::StreamError| keep_stream_error(&slot, &e);
         let stream = match cfg.sample_format() {
             cpal::SampleFormat::F32 => dev.build_output_stream(&config, move |buf: &mut [f32], _| fill(buf, channels, rate), err, None),
             cpal::SampleFormat::I16 => {
@@ -95,13 +85,6 @@ impl AudioOut for CpalOut {
     fn stop(&mut self) {
         self.stream = None;
         self.report();
-    }
-
-    fn failure(&mut self) -> Option<String> {
-        if !self.dead.swap(false, Ordering::Relaxed) {
-            return None;
-        }
-        Some(take_stream_error(&self.error).unwrap_or_else(|| "the audio device is no longer available".to_string()))
     }
 }
 
