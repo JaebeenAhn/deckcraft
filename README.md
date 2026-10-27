@@ -7,61 +7,105 @@
   </a>
 </p>
 
-<p align="center">
-  <img src="assets/app-icon/hicolor/256x256/apps/ai.storyteller.deckcraft.png" width="128" height="128" alt="DeckCraft icon: a presentation screen with a bar chart on an orange tile">
-</p>
-
-<h1 align="center">DeckCraft</h1>
+<h1 align="center">DeckCraft — 한국어 인터페이스 에디션 (Korean UI Edition)</h1>
 
 <p align="center">
-  <b>Presentations and slide shows; an open-source, modern presentation and slide designer, built in pure Rust.</b>
+  <b>순수 Rust로 구현된 오픈소스 프레젠테이션·슬라이드 쇼 프로그램 DeckCraft의 한국어(Korean) 인터페이스 버전입니다.</b><br>
+  Microsoft PowerPoint(<code>.pptx</code>) 파일 열기·편집·저장, PDF/이미지 내보내기, 전체 화면 발표, CLI 및 AI 에이전트(MCP) 제어를 지원합니다.
 </p>
 
 <p align="center">
-  Build decks with themes, layouts, shapes, pictures, tables, charts, transitions and animations,
-  open and save .pptx presentation files, and present them full screen. Native on macOS, Windows, Linux
-  and FreeBSD, and in the browser. Every button is also a command that the CLI and AI agents
-  (through MCP) can drive.
-</p>
-
-<p align="center">
-  <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-f26b1d?style=flat-square">
+  <a href="https://github.com/JaebeenAhn/deckcraft/releases/tag/v0.11.1-ko.1"><img alt="Release: v0.11.1-ko.1" src="https://img.shields.io/badge/release-v0.11.1--ko.1-f26b1d?style=flat-square"></a>
+  <img alt="Korean Localization: 100% (1,486 strings)" src="https://img.shields.io/badge/한국어%20번역-100%25%20(1%2C486%20항목)-2ea44f?style=flat-square">
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue?style=flat-square">
   <img alt="Written in Rust" src="https://img.shields.io/badge/written%20in-Rust-b7410e?style=flat-square">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20BSD%20%C2%B7%20Web-555?style=flat-square">
-  <br>
-  <a href="https://sonarcloud.io/project/overview?id=storytold_deckcraft"><img alt="Scanned by SonarCloud" src="https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white"></a>
-  <a href="https://coderabbit.ai"><img alt="Reviewed by CodeRabbit" src="https://img.shields.io/coderabbit/prs/github/storytold/deckcraft?style=flat-square&label=Reviewed%20by%20CodeRabbit&logo=coderabbit"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20·%20macOS%20·%20Linux%20·%20BSD%20·%20Web-555?style=flat-square">
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+  <a href="https://github.com/JaebeenAhn/deckcraft/releases/download/v0.11.1-ko.1/deckcraft-0.11.1-ko-windows-x64-portable.zip"><b>📦 Windows x64 한국어 무설치 버전 바로 다운로드 (ZIP)</b></a> ·
+  <a href="https://github.com/JaebeenAhn/deckcraft/releases/tag/v0.11.1-ko.1">릴리스 노트 (v0.11.1-ko.1)</a> ·
+  <a href="https://github.com/storytold/deckcraft/pull/34#issuecomment-6432308306">Upstream PR #34 기여 내역</a>
 </p>
+
+---
+
+## 한국어 인터페이스 미리보기 (Screenshots)
 
 <p align="center">
-  <a href="https://getartcraft.com/apps/deckcraft"><b>DeckCraft on getartcraft.com</b></a> ·
-  <a href="https://getartcraft.com/">ArtCraft</a> ·
-  <a href="https://getartcraft.com/apps">All Crafting Apps</a>
+  <img alt="DeckCraft 한국어 메인 편집기 화면" src="https://github.com/JaebeenAhn/deckcraft/releases/download/v0.11.1-ko.1/ko-editor.png" width="900"><br>
+  <sub><b>메인 편집기 화면</b> — 리본 탭(홈, 삽입, 그리기, 디자인, 전환, 애니메이션, 슬라이드 쇼, 녹화, 검토, 보기) 및 슬라이드 캔버스 한국어 UI</sub>
 </p>
 
-> [!NOTE]
-> **ArtCraft is a community of artists from all walks of life.** Painters, photographers,
-> filmmakers, illustrators, designers, animators, hobbyists, and people who picked up a pencil
-> last week. If you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/artcraft).**
+<table>
+  <tr>
+    <td width="50%">
+      <img alt="환경 설정 대화상자 (인터페이스 언어: 한국어)" src="https://github.com/JaebeenAhn/deckcraft/releases/download/v0.11.1-ko.1/ko-preferences.png"><br>
+      <sub><b>환경 설정 (Preferences)</b> — 인터페이스 언어(시스템 기본값 / 한국어 / English) 실시간 전환</sub>
+    </td>
+    <td width="50%">
+      <img alt="표 삽입 대화상자" src="https://github.com/JaebeenAhn/deckcraft/releases/download/v0.11.1-ko.1/ko-table.png"><br>
+      <sub><b>표 삽입 대화상자</b> — 대화상자, 입력 필드 및 버튼 한국어 로컬라이제이션</sub>
+    </td>
+  </tr>
+</table>
 
-<p align="center">
-  <img alt="DeckCraft editing a slide: ribbon, slide thumbnails with sections, a process diagram on the canvas, notes and status bar" src="docs/images/editor.png" width="900">
-</p>
+---
 
-<p align="center">
-  <a href="#what-works-today">What works</a> ·
-  <a href="#getting-started">Getting started</a> ·
-  <a href="#agents-cli-and-mcp">Agents, CLI and MCP</a> ·
-  <a href="#roadmap">Roadmap</a> ·
-  <a href="#downloads">Downloads</a> ·
-  <a href="#the-crafting-apps">The Crafting Apps</a> ·
-  <a href="#license-and-credits">License</a>
-</p>
+## 한국어 에디션 주요 변경 및 적용 사항
+
+이 저장소는 공식 [`storytold/deckcraft`](https://github.com/storytold/deckcraft) 프로젝트와 다국어 아키텍처([PR #34](https://github.com/storytold/deckcraft/pull/34))를 기반으로 **한국어 인터페이스(`ko` / `ko-KR`)** 와 **한글 시스템 폰트 렌더링**을 추가한 버전입니다 ([Commit `b32a78ff`](https://github.com/JaebeenAhn/deckcraft/commit/b32a78ff10ee56c6197a6de27b34cd8b9aaa9d29)).
+
+| 구분 | 수정 파일 | 상세 내용 |
+|---|---|---|
+| **한국어 번역 카탈로그** | [`crates/ui-egui/src/i18n/ko.tsv`](crates/ui-egui/src/i18n/ko.tsv) | 리본 메뉴, 명령 팔레트, 우클릭 컨텍스트 메뉴, 사이드 패널, 대화상자, 도형 150여 종, 표·차트, 전환·애니메이션, 발표자 보기, 단축키 안내 등 **총 1,486개 UI 문자열 100% 한국어 번역** |
+| **로케일 엔진 및 수량 포맷** | [`crates/ui-egui/src/i18n.rs`](crates/ui-egui/src/i18n.rs) | `Language::Ko` (`한국어`, 코드 `ko`, 로케일 `ko` / `ko-KR` / `ko_KR.UTF-8`) 등록, OS 시스템 언어 자동 감지 및 한국어 수량 표기(`{count}개` 등) 지원 |
+| **언어 선택 환경 설정** | [`crates/ui-egui/src/lib.rs`](crates/ui-egui/src/lib.rs), [`dialogs.rs`](crates/ui-egui/src/dialogs.rs) | `InterfaceLanguagePreference::Korean` 추가 및 **환경 설정 ▸ 인터페이스 언어** 드롭다운 연동 (`ui.json`에 설정 영구 저장) |
+| **한글/CJK UI 폰트 폴백** | [`crates/ui-egui/src/theme.rs`](crates/ui-egui/src/theme.rs) | 기본 영문 폰트(`Inter`)에서 한글 음절(`U+AC00..U+D7A3`)이 네모(`□`)로 깨지는 현상을 방지하기 위해 Windows(`Pretendard`, `맑은 고딕`), macOS(`AppleGothic`), Linux(`나눔고딕`) 시스템 폰트 자동 로드 |
+| **단위 테스트 검증** | `i18n::tests` (7종) | 키 중복·누락 검사, 자리표시자(`{name}`, `{count}`) 무결성 검사, 명령·메뉴·갤러리 전수 번역 검사 및 헤드리스 UI 렌더링 테스트 통과 |
+
+---
+
+## 다운로드 및 실행 방법 (Windows)
+
+1. **[Releases 페이지 (`v0.11.1-ko.1`)](https://github.com/JaebeenAhn/deckcraft/releases/tag/v0.11.1-ko.1)** 에서 **`deckcraft-0.11.1-ko-windows-x64-portable.zip`** 파일을 내려받습니다.
+2. 원하는 폴더에 압축을 해제한 뒤 **`deckcraft.exe`** 를 실행합니다.
+3. 한국어 Windows 환경에서는 실행 즉시 **한국어 인터페이스**로 시작됩니다.
+   - 수동으로 언어를 변경하려면 상단 좌측 **홈(집 모양) 아이콘 ▸ 환경 설정... ▸ 인터페이스 언어**에서 `한국어` 또는 `English`를 선택하세요.
+
+---
+
+## DeckCraft 주요 기능
+
+- **슬라이드 제작**: 슬라이드 마스터 및 11가지 기본 레이아웃, 8종의 내장 테마(색상·글꼴 조합), 구역(Section) 관리, 슬라이드 노트, 메모(Comments), 머리글/바닥글, 사용자 지정 슬라이드 크기.
+- **도형 및 드로잉**: 조절 핸들이 포함된 150개 이상의 기본 도형, 도형에 자석처럼 붙는 연결선(Connector), 자유형·곡선·자유 곡선 그리기, 도형 병합(결합, 조합, 조각, 교차, 빼기), 그라데이션·그림·패턴 채우기, 그림자·네온·부드러운 가장자리·반사 효과.
+- **텍스트 및 서식**: 글꼴·단락 서식, 글머리 기호 및 번호 매기기, 다단(Columns) 편집, 텍스트 자동 맞춤(Autofit), 세로 텍스트, 날짜/슬라이드 번호 필드 및 하이퍼링크.
+- **콘텐츠 삽입**: 그림 자르기 및 색 보정, 표 스타일, 차트, SmartArt 다이어그램, 오디오 및 비디오 재생(MP3, AAC, FLAC, Ogg, Opus, WAV, H.264, HEVC, VP9, AV1).
+- **발표 및 애니메이션**: 모핑(Morph)을 포함한 슬라이드 전환 효과, 나타내기/강조/끝내기 및 이동 경로 애니메이션, 전체 화면 슬라이드 쇼, 발표자 보기(Presenter View), 레이저 포인터·펜 판서, 시간 예행연습.
+- **파일 호환 및 내보내기**: Microsoft PowerPoint `.pptx` 파일 열기 및 저장, PDF 내보내기(슬라이드, 노트 페이지, 유인물), PNG/JPEG 고해상도 이미지 내보내기, 자동 복구(AutoRecover).
+- **자동화 및 AI 연동 (CLI & MCP)**: 200개 이상의 모든 편집 명령을 명령줄(`deckcraft-cli`)과 JSON 제어 채널, AI 에이전트용 **MCP(Model Context Protocol)** 서버로 제어 가능.
+
+---
+
+## 소스 코드에서 직접 빌드하기 (Build from Source)
+
+```bash
+git clone -b i18n/korean https://github.com/JaebeenAhn/deckcraft.git
+cd deckcraft
+
+# 한국어 번역 카탈로그 단위 테스트 실행
+cargo test -p deckcraft-ui-egui i18n::tests
+
+# 릴리스 바이너리 빌드 (deckcraft GUI 및 deckcraft-cli)
+cargo build --release -p deckcraft -p deckcraft-cli
+```
+
+---
+
+<details>
+<summary><b>🌐 Original English README (Upstream Overview)</b></summary>
+
+<br>
 
 ## What works today
 
@@ -81,74 +125,10 @@ Today it can:
   audio and video (MP3, AAC, FLAC, ALAC, Ogg, Opus, WAV, AIFF; H.264, HEVC, VP9, AV1).
 - **Present**: transitions (including Morph), entrance/emphasis/exit and motion-path animations,
   by-paragraph builds, full-screen slide show, presenter view, pen, rehearse timings, media playback.
-- **Exchange files**: open and save .pptx presentations, export PDF (slides, notes pages, handouts
-  with selectable text), PNG/JPEG, an animated GIF of the deck and outlines. Unsaved work is kept by AutoRecover.
+- **Exchange files**: open and save PowerPoint `.pptx`, export PDF (slides, notes pages, handouts
+  with selectable text), PNG/JPEG and outlines. Unsaved work is kept by AutoRecover.
 - **Automate**: 200+ commands with undo, all scriptable from the CLI, a JSON control channel and an
   MCP server for AI agents.
-
-<table>
-  <tr>
-    <td width="50%"><img alt="A selected shape with the Shape Format tab" src="docs/images/shape-format.png"><br><sub>Shape Format contextual tab and selection handles</sub></td>
-    <td width="50%"><img alt="The Format Shape pane editing a gradient fill" src="docs/images/format-pane.png"><br><sub>Format Shape pane: gradient type, direction and stops</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img alt="Slide Sorter view with transitions under each slide" src="docs/images/slide-sorter.png"><br><sub>Slide Sorter with each slide's transition</sub></td>
-    <td width="50%"><img alt="DeckCraft in dark mode showing a chart slide" src="docs/images/dark-mode.png"><br><sub>Dark mode, with a native chart</sub></td>
-  </tr>
-</table>
-
-<p align="center">
-  <img alt="All eight slides of the Northern Lights sample deck" src="docs/images/sample-deck.png" width="900"><br>
-  <sub>The built-in sample deck, rendered by <code>deckcraft-cli render --sample --all</code></sub>
-</p>
-
-## Getting started
-
-PDF export uses the shared `craft-pdf` writer with import features disabled. See
-[`crates/pdf/README.md`](crates/pdf/README.md) for the dependency and validation requirements.
-
-```sh
-git clone https://github.com/storytold/deckcraft
-cd deckcraft
-cargo run --release -p deckcraft-cli -- render --sample --all --scale 1 out/
-```
-
-On Linux, the build also needs the ALSA headers for slide-show sound: `alsa-lib-devel` on Fedora,
-`libasound2-dev` on Debian and Ubuntu, `alsa-lib` on Arch. Without them it stops at `alsa-sys`.
-
-Fonts come from [craft-fonts](https://github.com/storytold/craft-fonts): clone it next to this repo
-(`../craft-fonts`) and local builds pick it up automatically; without it DeckCraft uses your system
-fonts.
-
-Each [GitHub release](https://github.com/storytold/deckcraft/releases) has ready-made builds, on Linux as
-an AppImage, a `.deb`, an `.rpm` and a tarball. On Gentoo, the community [::snakebyte
-overlay](https://github.com/switch87/snakebyte-overlay) packages the Linux release as
-`app-office/deckcraft-bin` (not maintained by the DeckCraft team):
-
-```sh
-eselect repository add snakebyte git https://github.com/switch87/snakebyte-overlay.git
-emaint sync -r snakebyte
-echo 'app-office/deckcraft-bin ~amd64' >> /etc/portage/package.accept_keywords/deckcraft
-emerge --ask app-office/deckcraft-bin
-```
-
-### Logs
-
-The desktop app writes its `log` records to standard error and to `logs/deckcraft.log` in the
-settings directory, beside `ui.json` and `prefs.json` (Linux `~/.config/deckcraft/logs/`, or
-`$XDG_CONFIG_HOME/deckcraft/logs/`; macOS `~/Library/Application Support/DeckCraft/logs/`; Windows
-`%APPDATA%\DeckCraft\logs\`). A start from a desktop menu or the Dock has no terminal, so this file
-is what to attach to a bug report: the crash guard's panic report, a failed crash-recovery save,
-Parts skipped on import and audio output problems land there. Each launch moves the
-previous log to `deckcraft.1.log` (and that one to `deckcraft.2.log`), so the log of a run that
-crashed survives the next start. The file stops growing at 16 MiB. `--version` writes no file.
-
-| Variable | Effect |
-|---|---|
-| `RUST_LOG` | Log levels for standard error and the log file. Default: `info` for DeckCraft's own crates, `warn` for everything else. env_logger-style directives replace that, e.g. `RUST_LOG=debug`, `RUST_LOG=warn,deckcraft_pptx=trace` or `RUST_LOG=info,wgpu_core=warn`; a directive ending in `*` covers every target starting with it (`deckcraft*=debug`). |
-
-The logger is `apps/deckcraft/src/logging.rs`; the realtime audio callback does not log. The web
-app logs to the browser console instead.
 
 ## Agents, CLI and MCP
 
@@ -160,175 +140,15 @@ deckcraft-cli commands format.          # list commands
 deckcraft-cli run --sample --cmd 'slide.new={"layout":"titleOnly","title":"Hello"}' --save hello.deckcraft
 deckcraft-cli mcp                       # MCP server over stdio (headless)
 deckcraft-cli mcp --connect 7990        # drive the running app (deckcraft --control 7990)
-deckcraft-cli mcp --automation-read-root DIR --automation-write-root DIR   # confine the headless agent to folders
 ```
 
-## Roadmap
+</details>
 
-DeckCraft is in **alpha**. It covers **84% of the features tracked in [`docs/target-app-parity.md`](docs/target-app-parity.md) by breadth** (92% of the core
-ones, measured) and is about **55% ready for real work across all tracked capabilities** (estimated).
-See [ROADMAP.md](ROADMAP.md) for the stage, numbers by dimension and what's next,
-[docs/target-app-parity.md](docs/target-app-parity.md) for the full assessment,
-[docs/gaps.md](docs/gaps.md) for every known shortfall and
-[docs/parity-checklist.md](docs/parity-checklist.md) for the feature-by-feature checklist.
+---
 
-## Downloads
+## 라이선스 및 저작권 (License and Credits)
 
-**Download DeckCraft** from GitHub: the [latest release](https://github.com/storytold/deckcraft/releases/latest) has every build listed below, and [all releases](https://github.com/storytold/deckcraft/releases) has earlier versions and their notes. `<ver>` in the file names is the version number, and `SHA256SUMS.txt` lists a checksum for every file.
-
-### Windows
-
-| Build | Installer | Portable |
-|---|---|---|
-| x64 (64-bit Intel/AMD) | `deckcraft-<ver>-windows-x64.msi` | `deckcraft-<ver>-windows-x64-portable.zip` |
-| arm64 (Snapdragon and other ARM PCs) | `deckcraft-<ver>-windows-arm64.msi` | `deckcraft-<ver>-windows-arm64-portable.zip` |
-| x86 (32-bit) | `deckcraft-<ver>-windows-x86.msi` | `deckcraft-<ver>-windows-x86-portable.zip` |
-
-Installers and executables are code-signed.
-
-**If the app doesn't open on Windows:** the desktop app initializes only DirectX 12 by default.
-Letting wgpu also create an OpenGL instance can crash some graphics drivers (AMD's
-`atio6axx.dll`) before the window appears, so the app would flash in Task Manager and quit.
-`WGPU_BACKEND` overrides the default for troubleshooting (for example `dx12` or `vulkan`). In
-PowerShell, from the folder containing the executable:
-
-```powershell
-$env:WGPU_BACKEND = "vulkan"
-& .\deckcraft.exe
-Remove-Item Env:WGPU_BACKEND                     # restore the default for later launches
-```
-
-An explicit `gl` override can bring the driver crash back on affected systems. The macOS, Linux
-and web backend defaults are unchanged.
-
-DirectX 12 shaders are compiled with FXC, which is part of Windows, so no `dxcompiler.dll` or
-`dxil.dll` is needed ("Parent device is lost" at start, #153). `$env:WGPU_DX12_COMPILER = "dxc"`
-(or `"auto"`) selects wgpu's DXC handling again for troubleshooting.
-
-### macOS
-
-| Build | File | Notes |
-|---|---|---|
-| App, universal (Apple silicon + Intel) | `deckcraft-<ver>-macos-universal.dmg` | Signed and notarized |
-| Command-line tool, universal | `deckcraft-cli-<ver>-macos-universal.zip` | Signed and notarized |
-
-### Linux
-
-| Format | x86_64 | aarch64 (ARM64) | Notes |
-|---|---|---|---|
-| AppImage | `deckcraft-<ver>-linux-x86_64.AppImage` | `deckcraft-<ver>-linux-aarch64.AppImage` | Runs anywhere; updates itself with [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) (`.zsync` files) |
-| Flatpak | `deckcraft-<ver>-linux-x86_64.flatpak` | `deckcraft-<ver>-linux-aarch64.flatpak` | Sandboxed; `flatpak install --user <file>` |
-| Debian/Ubuntu | `deckcraft-<ver>-linux-x86_64.deb` | `deckcraft-<ver>-linux-aarch64.deb` | |
-| Fedora/RHEL/openSUSE | `deckcraft-<ver>-linux-x86_64.rpm` | `deckcraft-<ver>-linux-aarch64.rpm` | |
-| Tarball | `deckcraft-<ver>-linux-x86_64.tar.gz` | `deckcraft-<ver>-linux-aarch64.tar.gz` | Unpack anywhere |
-
-RISC-V 64 (riscv64): `deckcraft-<ver>-linux-riscv64.tar.gz`, a tarball only (cross-compiled; needs glibc 2.39+, e.g. Ubuntu 24.04+).
-
-**Runtime libraries.** The window-system, GPU and file-dialog libraries DeckCraft needs are opened
-when the app starts (`dlopen` through `x11-dl`, `xkbcommon-dl`, `ash`, `glutin` and `rfd`) instead
-of being linked in, so `ldd` shows none of them: an install that satisfies the linked dependencies
-can still fail at start-up with a loader error and no hint of what to install. Only
-`libasound.so.2` (slide-show sound) is a hard link-time dependency, and only of the `deckcraft`
-GUI — `deckcraft-cli` uses neither sound nor a display. The `.deb` and `.rpm` declare the set in
-`packaging/linux/nfpm.yaml`; a tarball install or a musl system has to provide it itself:
-
-```sh
-apk add libx11 libxcursor libxrandr libxi libxkbcommon xkeyboard-config \
-        wayland-libs-client alsa-lib \
-        vulkan-loader mesa-vulkan-swrast \
-        mesa-gl mesa-egl mesa-dri-gallium \
-        xdg-desktop-portal
-```
-
-Alpine Linux `v3.22` names above; Void's musl variant uses the same `/lib/ld-musl-x86_64.so.1`
-loader and the same libraries as `libX11 libXcursor libXrandr libXi libxkbcommon xkeyboard-config
-wayland alsa-lib vulkan-loader mesa xdg-desktop-portal`. There is no musl build among the release
-artifacts yet — this is what a build from source on musl needs at run time, and what a future musl
-artifact will need (#954).
-
-- `mesa-vulkan-swrast` is the software Vulkan driver: it runs anywhere, VMs and containers
-  included. On a real GPU install your vendor's driver instead (`mesa-vulkan-intel`,
-  `mesa-vulkan-ati`, `mesa-vulkan-nouveau`, …).
-- Without Vulkan the app falls back to CPU rendering through Mesa's GL drivers. It works, but
-  slowly — a driver limit, not a DeckCraft bug.
-- `xdg-desktop-portal` (with `xdg-desktop-portal-gtk` or `-kde`; `-wlr` has no file chooser, so
-  on wlroots compositors install `zenity`) is what the Open and Save dialogs talk to; `xkeyboard-config` holds the XKB keyboard data `libxkbcommon` reads.
-- fontconfig and freetype are not needed: DeckCraft reads `/usr/share/fonts` itself and embeds its
-  presentation fonts.
-
-Building from source on musl also needs `build-base pkgconf alsa-lib-dev` (`alsa-lib-dev` is the
-ALSA headers).
-
-### FreeBSD
-
-| Build | File |
-|---|---|
-| x86_64 | `deckcraft-<ver>-freebsd-x86_64.tar.gz` |
-
-### Web (WebAssembly)
-
-| Build | File | Notes |
-|---|---|---|
-| Static site | `deckcraft-web-<ver>.zip` | Runs in a modern browser; host it on any static server |
-
-## The Crafting Apps
-
-DeckCraft is one of the **Crafting Apps**: free, open-source creative tools from the
-[ArtCraft](https://getartcraft.com/) team, each written from scratch in Rust and each able to
-stand on its own.
-
-| | App | What it's for | Code | Learn more |
-|:-:|---|---|---|---|
-| <img src="https://raw.githubusercontent.com/storytold/photocraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.photocraft.png" alt="" width="32" height="32"> | **PhotoCraft** | Image editing: layers, masks, type and real PSD files | [GitHub](https://github.com/storytold/photocraft) | [Website](https://getartcraft.com/apps/photocraft) |
-| <img src="https://raw.githubusercontent.com/storytold/vectorcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.vectorcraft.png" alt="" width="32" height="32"> | **VectorCraft** | Vector illustration | [GitHub](https://github.com/storytold/vectorcraft) | [Website](https://getartcraft.com/apps/vectorcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/filmcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.filmcraft.png" alt="" width="32" height="32"> | **FilmCraft** | Video editing, color and sound | [GitHub](https://github.com/storytold/filmcraft) | [Website](https://getartcraft.com/apps/filmcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/lightcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.lightcraft.png" alt="" width="32" height="32"> | **LightCraft** | Photo library and raw development | [GitHub](https://github.com/storytold/lightcraft) | [Website](https://getartcraft.com/apps/lightcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/pdfcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.pdfcraft.png" alt="" width="32" height="32"> | **PdfCraft** | Reading, organizing and protecting PDFs | [GitHub](https://github.com/storytold/pdfcraft) | [Website](https://getartcraft.com/apps/pdfcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/effectcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.effectcraft.png" alt="" width="32" height="32"> | **EffectCraft** | Motion graphics and visual effects | [GitHub](https://github.com/storytold/effectcraft) | [Website](https://getartcraft.com/apps/effectcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/designcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.designcraft.png" alt="" width="32" height="32"> | **DesignCraft** | Page layout and publishing | [GitHub](https://github.com/storytold/designcraft) | [Website](https://getartcraft.com/apps/designcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/deckcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.deckcraft.png" alt="" width="32" height="32"> | **DeckCraft** | **Presentations and slide shows · you are here** | [GitHub](https://github.com/storytold/deckcraft) | [Website](https://getartcraft.com/apps/deckcraft) |
-
-And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video studio for artists who want real control.
-
-<br>
-
-<p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
-</p>
-
-<h3 align="center">Come make things with us</h3>
-
-<p align="center">
-  Our Discord is where artists of every kind hang out: people who paint, shoot, draw, cut film,
-  set type, and people still figuring out what they like to make. Share what you're working on,
-  ask for help, tell us what's broken, or tell us what you wish these tools could do.
-  Whatever your medium and however long you've been at it, you're welcome here.
-</p>
-
-<p align="center">
-  <a href="https://discord.gg/artcraft"><b>discord.gg/artcraft</b></a> ·
-  <a href="https://getartcraft.com/">getartcraft.com</a> ·
-  <a href="https://getartcraft.com/apps">The Crafting Apps</a> ·
-  <a href="https://getartcraft.com/apps/deckcraft">DeckCraft</a>
-</p>
-
-## License and credits
-
-DeckCraft is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
-Copyright (c) 2026 ArtCraft Team and the DeckCraft contributors. Required notices are in [NOTICE](NOTICE).
-
-Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
-with its author, source and license in [ATTRIBUTION.md](ATTRIBUTION.md).
-
-DeckCraft's themes, layouts, shape geometry, icons and sample decks are original work, drawn or
-generated in code; no proprietary artwork, fonts, themes or templates are used.
-
-The ArtCraft name, wordmark and logos in [`docs/brand/`](docs/brand/) are trademarks of the
-ArtCraft Team and are not covered by this license. They may be used only unmodified, and only as
-part of this repository and DeckCraft, under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
-Forks and modified versions must remove them.
-
-<p align="center">
-  <a href="https://getartcraft.com/"><img alt="ArtCraft" src="docs/brand/artcraft-mark.svg" width="28"></a><br>
-  <sub>Made by the <a href="https://getartcraft.com/">ArtCraft</a> team and community.</sub>
-</p>
+- DeckCraft는 [MIT](LICENSE-MIT) 또는 [Apache-2.0](LICENSE-APACHE) 듀얼 라이선스로 배포됩니다.
+- 원본 프로젝트: [storytold/deckcraft](https://github.com/storytold/deckcraft) (Copyright (c) 2026 ArtCraft Team and the DeckCraft contributors)
+- 다국어(i18n) 기반 아키텍처: [@dmatviichuk](https://github.com/dmatviichuk) ([PR #34](https://github.com/storytold/deckcraft/pull/34))
+- 한국어(`ko`) 번역 카탈로그 및 한글 UI 폰트 폴백: [@JaebeenAhn](https://github.com/JaebeenAhn) ([ATTRIBUTION.md](ATTRIBUTION.md))
