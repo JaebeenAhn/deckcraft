@@ -153,7 +153,38 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     });
 }
 
-/// UI fonts: Inter (from craft-fonts) when embedded, a Japanese UI face for CJK, then egui's.
+#[cfg(not(target_arch = "wasm32"))]
+fn load_korean_ui_fonts(defs: &mut FontDefinitions, regular_names: &mut Vec<String>, bold_names: &mut Vec<String>) {
+    let mut reg_candidates = Vec::new();
+    let mut bold_candidates = Vec::new();
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from) {
+        let user_fonts = local.join("Microsoft/Windows/Fonts");
+        reg_candidates.push(user_fonts.join("Pretendard-Regular.ttf"));
+        reg_candidates.push(user_fonts.join("Pretendard-Regular.otf"));
+        bold_candidates.push(user_fonts.join("Pretendard-SemiBold.ttf"));
+        bold_candidates.push(user_fonts.join("Pretendard-Bold.ttf"));
+    }
+    reg_candidates.push(std::path::PathBuf::from("C:/Windows/Fonts/Pretendard-Regular.ttf"));
+    reg_candidates.push(std::path::PathBuf::from("C:/Windows/Fonts/malgun.ttf"));
+    reg_candidates.push(std::path::PathBuf::from("/System/Library/Fonts/Supplemental/AppleGothic.ttf"));
+    reg_candidates.push(std::path::PathBuf::from("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"));
+    bold_candidates.push(std::path::PathBuf::from("C:/Windows/Fonts/Pretendard-SemiBold.ttf"));
+    bold_candidates.push(std::path::PathBuf::from("C:/Windows/Fonts/malgunbd.ttf"));
+    bold_candidates.push(std::path::PathBuf::from("/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"));
+
+    if let Some(bytes) = reg_candidates.iter().find_map(|p| std::fs::read(p).ok()) {
+        let name = "sys-ko-regular".to_string();
+        defs.font_data.insert(name.clone(), std::sync::Arc::new(FontData::from_owned(bytes)));
+        regular_names.push(name);
+    }
+    if let Some(bytes) = bold_candidates.iter().find_map(|p| std::fs::read(p).ok()) {
+        let name = "sys-ko-bold".to_string();
+        defs.font_data.insert(name.clone(), std::sync::Arc::new(FontData::from_owned(bytes)));
+        bold_names.push(name);
+    }
+}
+
+/// UI fonts: Inter (from craft-fonts) when embedded, Korean UI face (Pretendard/Malgun), a Japanese UI face for CJK, then egui's.
 pub fn install_fonts(ctx: &egui::Context) {
     let mut defs = FontDefinitions::default();
     let mut names = vec![];
@@ -168,14 +199,16 @@ pub fn install_fonts(ctx: &egui::Context) {
         defs.font_data.insert(name.clone(), std::sync::Arc::new(FontData::from_static(f.bytes)));
         names.push((f.family, f.style, name));
     }
-    let regular: Vec<String> = names.iter().filter(|(fam, st, _)| !(*fam == "Inter" && *st != "Regular")).map(|(_, _, n)| n.clone()).collect();
+    let mut regular: Vec<String> = names.iter().filter(|(fam, st, _)| !(*fam == "Inter" && *st != "Regular")).map(|(_, _, n)| n.clone()).collect();
+    let mut bold: Vec<String> = names.iter().filter(|(fam, st, _)| *fam == "Inter" && *st == "SemiBold").map(|(_, _, n)| n.clone()).collect();
+    #[cfg(not(target_arch = "wasm32"))]
+    load_korean_ui_fonts(&mut defs, &mut regular, &mut bold);
     if let Some(list) = defs.families.get_mut(&FontFamily::Proportional) {
         for (k, n) in regular.iter().enumerate() {
             list.insert(k, n.clone());
         }
     }
     // A bold family for headings and selected tabs.
-    let mut bold: Vec<String> = names.iter().filter(|(fam, st, _)| *fam == "Inter" && *st == "SemiBold").map(|(_, _, n)| n.clone()).collect();
     bold.extend(defs.families.get(&FontFamily::Proportional).cloned().unwrap_or_default());
     defs.families.insert(FontFamily::Name("bold".into()), bold);
     ctx.set_fonts(defs);

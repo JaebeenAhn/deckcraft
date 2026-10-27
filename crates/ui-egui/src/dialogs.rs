@@ -583,7 +583,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ok || cancel
         }
         "language" => {
-            ui.label("Українська");
+            ui.label("한국어");
             ui.label(crate::i18n::tr("Mark selected text as:"));
             for l in [
                 "English (United States)",
@@ -750,6 +750,7 @@ fn body(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                             let code = match language {
                                 crate::i18n::Language::System => "system",
                                 crate::i18n::Language::En => "en",
+                                crate::i18n::Language::Ko => "ko",
                                 crate::i18n::Language::Uk => "uk",
                             };
                             let _ = app.run("app.language", json!({"language": code}));
