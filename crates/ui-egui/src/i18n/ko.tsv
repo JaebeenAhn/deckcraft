@@ -1,0 +1,1488 @@
+# Korean interface catalog. English source<TAB>translation; \n denotes a line break.
+# Contributor-original translation, MIT OR Apache-2.0.
+  Fixed date (empty = update automatically):	  고정 날짜 (비워 두면 자동 업데이트):
+  Footer text:	  바닥글 텍스트:
+  Present  	  발표 시작  
+ pt	 pt
+ — Edited	 — 편집됨
+"Not Allowed" Symbol	금지 기호
+% of all commits	전체 커밋 비율(%)
++ New Comment	+ 새 메모
++ New Slide	+ 새 슬라이드
++ Row	+ 행 추가
++ Series	+ 계열 추가
++Bin	+구간
+ (not checked)	 (검사 안 함)
+100% Stacked Bar	100% 기준 누적 가로 막대형
+100% Stacked Column	100% 기준 누적 세로 막대형
+35mm Slides	35mm 슬라이드
+4 Point Star	십자형 별 (4각 별)
+5 Point Star	오각 별
+6 Point Star	육각 별
+8 Point Star	팔각 별
+@ribbon:Home	홈
+@ribbon:Insert	삽입
+@{}: {} PRs, {} commits, +{} / −{} lines (Δ {}), +{} / −{} binary assets, {} – {}	@{}: PR {}건, 커밋 {}건, +{} / −{}줄 (Δ {}), 바이너리 에셋 +{} / −{}, {} – {}
+A3 Paper (297x420 mm)	A3 용지 (297×420 mm)
+A4 Paper (210x297 mm)	A4 용지 (210×297 mm)
+Aa	Aa
+Abc	Abc
+About	정보
+About DeckCraft	DeckCraft 정보
+Accent 1	강조 1
+Accent 2	강조 2
+Accent 3	강조 3
+Accent 4	강조 4
+Accent 5	강조 5
+Accent 6	강조 6
+Accept Revision	수정 내용 적용
+Accessibility Checker	접근성 검사
+Across	가로 방향
+Action	실행
+Action Button: Custom	실행 단추: 사용자 지정
+Action Button: Document	실행 단추: 문서
+Action Button: Get Information	실행 단추: 정보 보기
+Action Button: Go Back	실행 단추: 뒤로 가기
+Action Button: Go Back or Previous	실행 단추: 뒤로 또는 이전
+Action Button: Go Forward or Next	실행 단추: 앞으로 또는 다음
+Action Button: Go Home	실행 단추: 홈으로
+Action Button: Go to Beginning	실행 단추: 처음으로
+Action Button: Go to End	실행 단추: 끝으로
+Action Button: Help	실행 단추: 도움말
+Action Button: Sound	실행 단추: 소리
+Action Button: Video	실행 단추: 비디오
+Action Button: {k}	실행 단추: {k}
+Action Buttons	실행 단추
+Action Settings	실행 설정
+Add Animation	애니메이션 추가
+Add Font	글꼴 추가
+Add Guide	안내선 추가
+Add Horizontal Guide	가로 안내선 추가
+Add Point	점 추가
+Add Section	구역 추가
+Add Shape	도형 추가
+Add to Dictionary	사전에 추가
+Add to Quick Access Toolbar	빠른 실행 도구 모음에 추가
+Add Vertical Guide	세로 안내선 추가
+Add\nAnimation	애니메이션\n추가
+Address:	주소:
+Adjust Shape	도형 조정
+After Previous	이전 효과 다음에
+After:	다음:
+Airplane	비행기
+Align	맞춤
+Align Bottom	아래쪽 맞춤
+Align Cell Text	셀 텍스트 맞춤
+Align Center	가운데 맞춤
+Align Left	왼쪽 맞춤
+Align Middle	중간 맞춤
+Align Right	오른쪽 맞춤
+Align Text	텍스트 맞춤
+Align Top	위쪽 맞춤
+Alt Text	대체 텍스트
+Alt+	Alt+
+Alt+F9	Alt+F9
+Alt\nText	대체\n텍스트
+An open-source, clean-room project. Not affiliated with Microsoft.	오픈소스 클린룸 프로젝트입니다. Microsoft와 무관합니다.
+Angle	각도
+Animation Gallery	애니메이션 갤러리
+Animation Pane	애니메이션 창
+Animation Styles	애니메이션 스타일
+Animation\nPane	애니메이션\n창
+Animations	애니메이션
+Animation Painter	애니메이션 복사
+Apply Animation	애니메이션 적용
+Play/Pause GIF	GIF 재생/일시 중지
+Animations on Slide	슬라이드의 애니메이션
+Appear	나타내기
+Apply	적용
+Apply Design Idea	디자인 아이디어 적용
+Apply To All	모두 적용
+Apply to All	모두 적용
+Apply\nTo All	모두\n적용
+Arc	원호
+Arcs	원호
+Area	영역형
+Arrange	정렬
+Arrow	화살표
+Arrow at end	끝 화살표
+Arrow at start	시작 화살표
+Arrow: Bent	화살표: 굽은 화살표
+Arrow: Bent-Up	화살표: 위로 굽은 화살표
+Arrow: Chevron	화살표: 갈매기형 수장
+Arrow: Down	화살표: 아래쪽
+Arrow: Left	화살표: 왼쪽
+Arrow: Left-Right	화살표: 양방향(좌우)
+Arrow: Left-Right-Up	화살표: 세 방향(좌·우·상)
+Arrow: Left-Up	화살표: 두 방향(좌·상)
+Arrow: Notched Right	화살표: 홈이 파인 오른쪽
+Arrow: Pentagon	화살표: 오각형
+Arrow: Quad	화살표: 네 방향
+Arrow: Right	화살표: 오른쪽
+Arrow: Striped Right	화살표: 줄무늬 오른쪽
+Arrow: U-Turn	화살표: 유턴
+Arrow: Up	화살표: 위쪽
+Arrow: Up-Down	화살표: 양방향(상하)
+Arrows	화살표
+Arrows at both ends	양끝 화살표
+As One Object	하나의 개체로
+Audio	오디오
+Audio from File…	파일에서 오디오…
+AutoCorrect as you type	입력할 때 자동 고침
+Autofit	자동 맞춤
+Automatic	자동
+B4 (ISO) Paper (250x353 mm)	B4 (ISO) 용지 (250×353 mm)
+B5 (ISO) Paper (176x250 mm)	B5 (ISO) 용지 (176×250 mm)
+Background	배경
+Background Styles	배경 스타일
+Background\nStyles	배경\n스타일
+Backspace	Backspace
+Banded Columns	줄무늬 열
+Banded Rows	줄무늬 행
+Banner	배너
+Basic Cycle	기본 주기형
+Basic List	기본 목록형
+Basic Process	기본 프로세스형
+Basic Shapes	기본 도형
+Before text (in):	텍스트 앞 여백 (인치):
+Bevel	입체 효과
+Binary assets added	추가된 바이너리 에셋
+Binary assets removed	삭제된 바이너리 에셋
+Black Left	검은색을 거쳐 왼쪽으로
+Black Pen	검은색 펜
+Black Right	검은색을 거쳐 오른쪽으로
+Blinds	블라인드
+Block Arc	막대형 원호
+Block Arrows	블록 화살표
+Blue	파랑
+Blue Pen	파란색 펜
+Bold	굵게
+Bold Flash	굵게 깜박이기
+Both	모두
+Bottom	아래쪽
+Bounce	통통 튀기
+Box	상자
+Box In	상자 안으로
+Box Out	상자 밖으로
+Box and Whisker	상자 수염 그림
+Brightness	밝기
+Brightness {:+}%	밝기 {:+}%
+Bring Forward	앞으로 가져오기
+Bring to Front	맨 앞으로 가져오기
+Bring\nForward	앞으로\n가져오기
+Browsed at a kiosk (full screen)	대화형 자동 진행 (전체 화면)
+Browsed by an individual (window)	개별 창에서 진행 (창 모드)
+Bubble	거품형
+Bullets	글머리 기호
+Burst	폭발
+By Paragraph	단락별
+Callout: Down Arrow	설명선: 아래쪽 화살표
+Callout: Left Arrow	설명선: 왼쪽 화살표
+Callout: Line	설명선: 선
+Callout: Right Arrow	설명선: 오른쪽 화살표
+Callout: Up Arrow	설명선: 위쪽 화살표
+Callouts	설명선
+Cameo	카메오
+Camera capture is not available yet	카메라 캡처 기능은 아직 지원되지 않습니다
+Cancel	취소
+Capitalize Each Word	단어 첫 글자만 대문자
+Caps	대문자
+Center	가운데
+Centered	가운데 맞춤
+Change Case	대/소문자 바꾸기
+Change Chart Type	차트 종류 변경
+Change Picture	그림 바꾸기
+Change Shape	도형 모양 변경
+Change\nChart Type	차트 종류\n변경
+Character Spacing	문자 간격
+Characters	문자 단위
+Chart	차트
+Chart Data	차트 데이터
+Chart Design	차트 디자인
+Chart Elements	차트 요소
+Chart…	차트…
+Check Accessibility	접근성 검사
+Check\nAccessibility	접근성\n검사
+Checkerboard	바둑판식
+Chevron	갈매기형 수장
+Choose a SmartArt Graphic	SmartArt 그래픽 선택
+Chord	현
+Circle	원
+Circle In	원 안으로
+Circle Out	원 밖으로
+Clear All Formatting	서식 모두 지우기
+Click a symbol to insert it at the insertion point.	기호를 클릭하면 커서 위치에 삽입됩니다.
+Click icon to add SmartArt graphic	아이콘을 클릭하여 SmartArt 그래픽 추가
+Click icon to add chart	아이콘을 클릭하여 차트 추가
+Click icon to add media	아이콘을 클릭하여 미디어 추가
+Click icon to add picture	아이콘을 클릭하여 그림 추가
+Click icon to add table	아이콘을 클릭하여 표 추가
+Click to add first slide	첫 슬라이드를 추가하려면 클릭하세요
+Click to add notes	슬라이드 노트를 입력하려면 클릭하세요
+Click to add subtitle	부제목을 입력하려면 클릭하세요
+Click to add text	텍스트를 입력하려면 클릭하세요
+Click to add title	제목을 입력하려면 클릭하세요
+Click to edit Master text styles	마스터 텍스트 스타일을 편집하려면 클릭하세요
+Click to edit Master title style	마스터 제목 스타일을 편집하려면 클릭하세요
+Clock	시계 방향
+Clockwise	시계 방향
+Close	닫기
+Close Master View	마스터 보기 닫기
+Close\nMaster View	마스터 보기\n닫기
+Cloud	구름
+Clustered Bar	묶은 가로 막대형
+Clustered Column	묶은 세로 막대형
+Cmd+	Cmd+
+Cmd+,	Cmd+,
+Cmd+-	Cmd+-
+Cmd+=	Cmd+=
+Cmd+F1	Cmd+F1
+Cmd+Shift+P	Cmd+Shift+P
+Collapse the Ribbon	리본 메뉴 축소
+Color	색
+Color At	색상 추출
+Color Pulse	색 진동
+Colors	색
+Columns	열
+Comb	빗질
+Combo	콤보
+Command Palette	명령 팔레트
+Comment	메모
+Comments	메모
+Commits	커밋
+Community Links	커뮤니티 링크
+Company	회사
+Complementary Color	보색
+Connect Shapes	도형 연결
+Connection Sites	연결점
+Connector: Curved	연결선: 곡선
+Connector: Elbow	연결선: 꺾인 선
+Connector: Elbow (one bend)	연결선: 꺾인 선(한 번 꺾임)
+Content	콘텐츠
+Contract	축소
+Contrast	대비
+Contrast {:+}%	대비 {:+}%
+Contributors	기여자
+Conveyor	컨베이어
+Copy	복사
+Corrections	보정
+Couldn't save AutoRecover information: {e}	자동 복구 정보를 저장할 수 없습니다: {e}
+Counter Clockwise	시계 반대 방향
+Cover	덮기
+Create	만들기
+Crop	자르기
+Crop 10% each side	각 변 10% 자르기
+Crop 20% each side	각 변 20% 자르기
+Crop to Shape	도형에 맞춰 자르기
+Cross	십자형
+Crush	구기기
+Ctrl+	Ctrl+
+Cube	정육면체
+Currency	통화
+Curtains	커튼
+Custom	사용자 지정
+Custom Path	사용자 지정 경로
+Custom Show	사용자 지정 쇼
+Custom Show 1	사용자 지정 쇼 1
+Custom Shows	사용자 지정 쇼
+Custom Slide Show	사용자 지정 슬라이드 쇼
+Custom\nShow	사용자 지정\n쇼
+Cut	잘라내기
+Cylinder	원기둥
+Dark Blue	진한 파랑
+Dark Mode	다크 모드
+Dark Red	진한 빨강
+Dark appearance	어두운 테마(다크 모드)
+Dark\nMode	다크\n모드
+Darken	어둡게
+Dash	파선
+Dash Dot	일점쇄선
+Dashes	대시 스타일
+Database	데이터베이스
+Date	날짜
+Date & Time	날짜 및 시간
+Date &\nTime	날짜 및\n시간
+Date and Time	날짜 및 시간
+Date and time	날짜 및 시간
+Decagon	십각형
+Decision	판단
+DeckCraft	DeckCraft
+Decrease Font Size	글꼴 크기 작게
+Decrease List Level	목록 수준 감소
+Delay:	지연 시간:
+Delete	삭제
+Delete Columns	열 삭제
+Delete Comment	메모 삭제
+Delete Layout	레이아웃 삭제
+Delete Rows	행 삭제
+Delete Slide	슬라이드 삭제
+Delete Table	표 삭제
+Delete Text	텍스트 삭제
+Desaturate	채도 낮추기
+Deselect	선택 해제
+Design	디자인
+Design Ideas	디자인 아이디어
+Design\nIdeas	디자인\n아이디어
+Deutsch	Deutsch
+Diagonal Stripe	대각선 줄무늬
+Diamond	다이아몬드
+Diamond In	다이아몬드 안으로
+Diamond Out	다이아몬드 밖으로
+Direction	방향
+Disappear	사라지기
+Discard Recovered Presentations	복구된 프레젠테이션 삭제
+Display name	표시 이름
+Dissolve	디졸브
+Dissolve In	디졸브(나타내기)
+Dissolve Out	디졸브(끝내기)
+Distribute	배분
+Distribute Columns	열 너비 같게
+Distribute Horizontally	가로 간격 동일하게
+Distribute Rows	행 높이 같게
+Distribute Vertically	세로 간격 동일하게
+Division Sign	나눗셈 기호
+Do not Autofit	자동 맞춤 안 함
+Do you want to save the changes you made to {what}?	{what}의 변경 내용을 저장하시겠습니까?
+Document	문서
+Dodecagon	십이각형
+Don't Save	저장 안 함
+Don't show on title slide	제목 슬라이드에는 표시 안 함
+Done	완료
+Donut	도넛
+Doors	문 열기
+Double Brace	이중 중괄호
+Double Bracket	이중 대괄호
+Double Wave	이중 물결
+Doughnut	도넛형
+Down	아래로
+Drape	드레이프
+Draw	그리기
+Drop Shadow Rectangle	그림자 있는 직사각형
+Duplicate	복제
+Duplicate Selected Slides	선택한 슬라이드 복제
+Duplicate Slide	슬라이드 복제
+Duration:	재생 시간:
+Dynamic Content	동적 콘텐츠
+Edit	편집
+Edit Alt Text…	대체 텍스트 편집…
+Edit Data	데이터 편집
+Edit Shape	도형 편집
+Edit Text	텍스트 편집
+Edit the data: first row = series names, first column = categories.	데이터 편집: 첫 번째 행은 계열 이름, 첫 번째 열은 항목입니다.
+Edit\nData	데이터\n편집
+Edit\nShape	도형\n편집
+Editing	편집 옵션
+Effect Options	효과 옵션
+Effect\nOptions	효과\n옵션
+Effects	효과
+Email Address	이메일 주소
+Email address:	이메일 주소:
+Emphasis	강조
+End	끝
+End Show	쇼 마침
+End of slide show	슬라이드 쇼 끝
+End of slide show, click to exit.	슬라이드 쇼가 끝났습니다. 종료하려면 클릭하세요.
+End trim (s):	끝 지점 자르기 (초):
+English (United Kingdom)	영어 (영국)
+English (United States)	한국어 (대한민국)
+Enter	Enter
+Entrance	나타내기
+Equals	등호
+Equation	수식
+Equation Shapes	수식 도형
+Eraser	지우개
+Escape	Escape
+Español	Español
+Exciting	화려한 효과
+Exit	끝내기
+Expand	확장
+Explosion: 14 Points	폭발: 14각
+Explosion: 8 Points	폭발: 8각
+Export	내보내기
+Export the presentation as:	프레젠테이션 내보내기 형식:
+Exported {path}	내보내기 완료: {path}
+Export…	내보내기…
+Fade	밝기 변화
+Fade in (s):	페이드 인 (초):
+Fade out (s):	페이드 아웃 (초):
+Fall Over	넘어지기
+Ferris Wheel	대관람차
+File	파일
+Fill	채우기
+Fill & Line	채우기 및 선
+Fill Color	채우기 색
+Filled Radar	채워진 방사형
+Find…	찾기…
+First	처음
+First Column	첫째 열 강조
+First Slide	첫 슬라이드
+First commit	첫 커밋
+Fit	창에 맞춤
+Fit slide to current window	현재 창 크기에 슬라이드 맞춤
+Fit to Window	창에 맞춤
+Fit to\nWindow	창에\n맞춤
+Flash	섬광
+Flip	대칭 이동
+Flip Horizontal	좌우 대칭
+Flip Vertical	상하 대칭
+Float In	떠오르기
+Float Out	가라앉기
+Flowchart	순서도
+Flowchart: Alternate Process	순서도: 대체 처리
+Flowchart: Card	순서도: 카드
+Flowchart: Collate	순서도: 조합
+Flowchart: Connector	순서도: 연결선
+Flowchart: Data	순서도: 데이터
+Flowchart: Decision	순서도: 판단
+Flowchart: Delay	순서도: 지연
+Flowchart: Direct Access Storage	순서도: 직접 액세스 저장소
+Flowchart: Display	순서도: 화면 표시
+Flowchart: Document	순서도: 문서
+Flowchart: Extract	순서도: 추출
+Flowchart: Internal Storage	순서도: 내부 저장소
+Flowchart: Magnetic Disk	순서도: 자기 디스크
+Flowchart: Manual Input	순서도: 수동 입력
+Flowchart: Manual Operation	순서도: 수동 작업
+Flowchart: Merge	순서도: 병합
+Flowchart: Multidocument	순서도: 다중 문서
+Flowchart: Off-page Connector	순서도: 다른 페이지 연결선
+Flowchart: Or	순서도: 논리합(OR)
+Flowchart: Predefined Process	순서도: 정의된 처리
+Flowchart: Preparation	순서도: 준비
+Flowchart: Process	순서도: 처리
+Flowchart: Punched Tape	순서도: 천공 테이프
+Flowchart: Sequential Access Storage	순서도: 순차 액세스 저장소
+Flowchart: Sort	순서도: 정렬
+Flowchart: Stored Data	순서도: 저장 데이터
+Flowchart: Summing Junction	순서도: 합산 접합
+Flowchart: Terminator	순서도: 단말(시작/종료)
+Fly In	날아오기
+Fly Out	날아가기
+Fly Through	통과하기
+Folded Corner	모서리가 접힌 도형
+Follow the layout	레이아웃 따르기
+Followed Hyperlink	열어본 하이퍼링크
+Font	글꼴
+Font Color	글꼴 색
+Font Size	글꼴 크기
+Fonts	글꼴
+Footer	바닥글
+Foreground	전경
+Format	서식
+Format Background	배경 서식
+Format Background…	배경 서식…
+Format Painter	서식 복사
+Format Painter (double-click to keep it on)	서식 복사 (유지하려면 두 번 클릭)
+Format Pane	서식 창
+Format Shape	도형 서식
+Format Shape…	도형 서식…
+Format\nBackground	배경\n서식
+Format\nPane	서식\n창
+Formatting State	서식 상태
+Fracture	산산조각
+Frame	액자
+Français	Français
+Freeform	자유형 도형
+From 	시작: 
+From Beginning	처음부터
+From Bottom	아래에서
+From Bottom Left	왼쪽 아래에서
+From Bottom Right	오른쪽 아래에서
+From Current Slide	현재 슬라이드부터
+From Left	왼쪽에서
+From Right	오른쪽에서
+From Top	위에서
+From Top Left	왼쪽 위에서
+From Top Right	오른쪽 위에서
+From bottom left	왼쪽 아래에서
+From bottom right	오른쪽 아래에서
+From center	가운데에서
+From top left	왼쪽 위에서
+From top right	오른쪽 위에서
+From\nBeginning	처음부터\n시작
+From\nCurrent Slide	현재 슬라이드\n부터
+Full	전체
+Full Page Slides	전체 페이지 슬라이드
+Funnel	깔때기형
+Gallery	갤러리
+General	일반
+Get Text	텍스트 가져오기
+Glitter	반짝임
+Glow	네온
+Go to	이동
+Go to Slide	슬라이드로 이동
+Grab bag	모음
+Gradient fill	그라데이션 채우기
+Gradient stops	그라데이션 중지점
+Gradient…	그라데이션…
+Grayscale	회색조
+Greek	그리스 문자
+Green	초록
+Gridlines	눈금선
+Group	그룹
+Group Objects	개체 그룹화
+Grow & Turn	크기 변경 및 회전
+Grow/Shrink	크기 확대/축소
+Guides	안내선
+Half	절반
+Half Frame	반쪽 액자
+Handout Master	유인물 마스터
+Handout Master (coming soon)	유인물 마스터 (지원 예정)
+Handout\nMaster	유인물\n마스터
+Handouts (1 slide per page)	유인물 (페이지당 1슬라이드)
+Handouts (2 slides per page)	유인물 (페이지당 2슬라이드)
+Handouts (3 slides per page)	유인물 (페이지당 3슬라이드)
+Handouts (4 slides per page)	유인물 (페이지당 4슬라이드)
+Handouts (6 slides per page)	유인물 (페이지당 6슬라이드)
+Handouts (9 slides per page)	유인물 (페이지당 9슬라이드)
+Header	머리글
+Header & Footer	머리글 및 바닥글
+Header &\nFooter	머리글 및\n바닥글
+Header Row	머리글 행
+Header and Footer	머리글 및 바닥글
+Header and Footer…	머리글 및 바닥글…
+Heart	하트
+Height	높이
+Height (in):	높이 (인치):
+Height:	높이:
+Help	도움말
+Heptagon	칠각형
+Hexagon	육각형
+Hide All	모두 숨기기
+Hide Background Graphics	배경 그래픽 숨기기
+Hide During Show	쇼 동안 숨기기
+Hide Slide	슬라이드 숨기기
+Hide background graphics	배경 그래픽 숨기기
+Hide\nSlide	슬라이드\n숨기기
+Hierarchy	계층 구조형
+High	높음
+Highlighter	형광펜
+Histogram	히스토그램
+Home	시작 화면
+Honeycomb	벌집
+Horizontal	가로
+Horz In	가로 안으로
+Horz Out	가로 밖으로
+How would you describe this object and its context to someone who is blind or has low vision?	시각 장애가 있는 사용자에게 이 개체와 문맥을 어떻게 설명하시겠습니까?
+Hyperlink	하이퍼링크
+Icons	아이콘
+In	안으로
+In Bounce	안으로 통통 튀기
+Include hidden slides	숨겨진 슬라이드 포함
+Increase Font Size	글꼴 크기 크게
+Increase List Level	목록 수준 증가
+Ink to Math	잉크를 수식으로
+Ink to Math (coming soon)	잉크를 수식으로 (지원 예정)
+Ink to Shape	잉크를 도형으로
+Ink to Shape (coming soon)	잉크를 도형으로 (지원 예정)
+Ink to Text	잉크를 텍스트로
+Ink to Text (coming soon)	잉크를 텍스트로 (지원 예정)
+Ink to\nMath	잉크를\n수식으로
+Ink to\nShape	잉크를\n도형으로
+Ink to\nText	잉크를\n텍스트로
+Inner	안쪽
+Insert	삽입
+Insert Above	위에 삽입
+Insert Below	아래에 삽입
+Insert Hyperlink	하이퍼링크 삽입
+Insert Layout	레이아웃 삽입
+Insert Left	왼쪽에 삽입
+Insert Placeholder	개체 틀 삽입
+Insert Right	오른쪽에 삽입
+Insert Table	표 삽입
+Insert Table…	표 삽입…
+Insert picture from file…	파일에서 그림 삽입…
+Insert\nAbove	위에\n삽입
+Insert\nBelow	아래에\n삽입
+Insert\nLayout	레이아웃\n삽입
+Insert\nLeft	왼쪽에\n삽입
+Insert\nPlaceholder	개체 틀\n삽입
+Insert\nRight	오른쪽에\n삽입
+Inspect Presentation	프레젠테이션 정보 검사
+Inspect Shape	도형 정보 검사
+Inspect Slide	슬라이드 정보 검사
+Interface Language	인터페이스 언어
+Interface language:	인터페이스 언어:
+Interface size	인터페이스 배율
+Isosceles Triangle	이등변 삼각형
+Italiano	Italiano
+Italic	기울임꼴
+JPEG image (current slide)	JPEG 이미지 (현재 슬라이드)
+Join our community on Discord	Discord 커뮤니티 참여하기
+Join the ArtCraft community on Discord	Discord에서 ArtCraft 커뮤니티 참여하기
+Justify	양쪽 맞춤
+L-Shape	L자 도형
+Language	언어
+Last	마지막
+Last Column	줄무늬 마지막 열
+Last Slide	마지막 슬라이드
+Last commit	최근 커밋
+Layout	레이아웃
+Learn More	자세히 알아보기
+Learn\nMore	자세히\n알아보기
+Ledger Paper (11x17 in)	Ledger 용지 (11×17 인치)
+Left	왼쪽
+Left Brace	왼쪽 중괄호
+Left Bracket	왼쪽 대괄호
+Letter Paper (8.5x11 in)	Letter 용지 (8.5×11 인치)
+Liberation Serif	Liberation Serif
+Light Blue	연한 파랑
+Light Green	연한 초록
+Light/Dark appearance	밝은/어두운 테마 전환
+Lighten	밝게
+Lightning	번개
+Lightning Bolt	번개
+Line	선
+Line Color	선 색
+Line Spacing	줄 간격
+Line Spacing Options…	줄 간격 옵션…
+Line delta	줄 변경량
+Line spacing (lines):	줄 간격 (줄):
+Line with Markers	표식이 있는 꺾은선형
+Linear	선형
+Lines	선
+Lines +/−	코드 줄 +/−
+Lines added	추가된 줄
+Lines deleted	삭제된 줄
+Link	링크
+Link…	링크…
+List Commands	명령 목록
+Lock	잠금
+Long Dash	긴 파선
+Long Dash Dot	긴 일점쇄선
+Loop continuously until 'Esc'	'Esc' 키를 누를 때까지 계속 실행
+Loop until Stopped	멈출 때까지 반복 재생
+Loops	반복
+Loose	넓게
+Low	낮음
+MIT OR Apache-2.0 · © 2026 ArtCraft Team and the DeckCraft contributors	MIT OR Apache-2.0 · © 2026 ArtCraft Team 및 DeckCraft 기여자
+Margins (pt)	여백 (pt)
+Mark as decorative	장식용으로 표시
+Mark selected text as:	선택한 텍스트의 교정 언어 설정:
+Math	수학 기호
+Matrix	행렬형
+Maximize content (else ensure fit)	콘텐츠 최대화 (또는 맞춤 유지)
+Media	미디어
+Media Info	미디어 정보
+Medium	보통
+Merge Cells	셀 병합
+Merge Shapes	도형 병합
+Merge\nCells	셀\n병합
+Merge\nShapes	도형\n병합
+Merged PRs	병합된 PR
+Middle	중간
+Minus Sign	뺄셈 기호
+Model	모델
+Models	모델
+Moon	달
+More Colors… #	다른 색… #
+Morph	모핑
+Motion	이동 경로
+Motion Paths	이동 경로
+Move	이동
+Move Down	아래로 이동
+Move Insertion Point	삽입 지점 이동
+Move Section	구역 이동
+Move Section Down	구역 아래로 이동
+Move Section Up	구역 위로 이동
+Move Slide	슬라이드 이동
+Move Up	위로 이동
+Multiplication Sign	곱셈 기호
+Multiply	곱하기
+Mute	음소거
+Name	이름
+Name (A–Z)	이름순 (가–하)
+Name:	이름:
+New Comment	새 메모
+New Presentation	새 프레젠테이션
+New Slide	새 슬라이드
+New Slide (⇧⌘N)	새 슬라이드 (⇧⌘N)
+New presentation	새 프레젠테이션
+New show name:	새 쇼 이름:
+New\nComment	새\n메모
+New\nSlide	새\n슬라이드
+Next	다음
+Next Slide	다음 슬라이드
+Next Window	다음 창
+Next ▶	다음 ▶
+No Color	색 없음
+No Fill	채우기 없음
+No Glow	네온 없음
+No Outline	윤곽선 없음
+No Reflection	반사 없음
+No Shadow	그림자 없음
+No Soft Edges	부드러운 가장자리 없음
+No accessibility issues found. People with disabilities should not have difficulty reading this document.	접근성 문제가 발견되지 않았습니다. 장애가 있는 사용자도 이 문서를 읽는 데 어려움이 없습니다.
+No comments on this slide.	이 슬라이드에는 메모가 없습니다.
+No contributor data was built into this copy.	이 빌드에는 기여자 데이터가 포함되지 않았습니다.
+No fill	채우기 없음
+No line	선 없음
+No model credits were built into this copy.	이 빌드에는 모델 크레딧 정보가 포함되지 않았습니다.
+No notes.	노트가 없습니다.
+No sound: {err}	소리 없음: {err}
+None	없음
+Normal	기본 보기
+Not Equal	같지 않음
+Not allowed	금지
+Notes	슬라이드 노트
+Notes Master	슬라이드 노트 마스터
+Notes Master (coming soon)	슬라이드 노트 마스터 (지원 예정)
+Notes Page	슬라이드 노트
+Notes Pages	슬라이드 노트 페이지
+Notes\nMaster	슬라이드 노트\n마스터
+Notes\nPage	슬라이드\n노트
+Nudge	미세 이동
+Number of columns:	열 개수:
+Number of rows:	행 개수:
+Numbering	번호 매기기
+Object Color	개체 색
+Objects	개체
+Octagon	팔각형
+On Click	클릭할 때
+On Click of {name}	{name} 클릭 시
+On Click of… (none)	클릭할 개체… (없음)
+On Mouse Click	마우스 클릭 시
+On-screen Show (16:10)	화면 슬라이드 쇼 (16:10)
+Open Data	데이터 열기
+Open Dialog	대화상자 열기
+Open Recovered Presentations	복구된 프레젠테이션 열기
+Open the sample deck	샘플 프레젠테이션 열기
+Open…	열기…
+Orange	주황
+Orbit	궤도
+Order Objects	개체 순서
+Origami	종이접기
+Out	밖으로
+Out Bounce	밖으로 통통 튀기
+Outer	바깥쪽
+Outline	개요
+Outline (.txt)	개요 텍스트 (.txt)
+Outline View	개요 보기
+Outline\nView	개요\n보기
+Oval	타원
+Oval ends	원형 끝
+Overhead	오버헤드
+PDF document (.pdf)	PDF 문서 (.pdf)
+PNG images (all slides)	PNG 이미지 (모든 슬라이드)
+PNG images (current slide)	PNG 이미지 (현재 슬라이드)
+PRs	PR
+Page Curl	페이지 말기
+Page Setup…	페이지 설정…
+PageDown	PageDown
+PageUp	PageUp
+Pan	화면 이동
+Pane	창
+Paragraph	단락
+Paragraph…	단락…
+Parallelogram	평행사변형
+Pareto	파레토
+Partial Circle	부분 원
+Particles	입자
+Paste	붙여넣기
+Paste (⌘V)	붙여넣기 (⌘V)
+Paste Formatting	서식 붙여넣기
+Paste and Match Formatting	붙여넣고 서식 맞추기
+Paste or type an outline. Unindented lines become slide titles; tab-indented lines become bullets.	개요를 붙여넣거나 입력하세요. 들여쓰기 없는 줄은 슬라이드 제목이 되고, 탭으로 들여쓴 줄은 글머리 기호가 됩니다.
+Pasted image.png	붙여넣은 이미지.png
+Path	경로
+Pattern fill	패턴 채우기
+Pause	일시 중지
+Peek In	살짝 들여다보기
+Peek Out	숨기기
+Peel Off	벗겨내기
+Pencil	연필
+Pentagon	오각형
+Perspective	원근감
+Pick a graphic; type one item per line.	그래픽을 선택하고 한 줄에 항목을 하나씩 입력하세요.
+Pick a look for your slides. Ideas are generated on your device.	슬라이드 디자인을 선택하세요. 아이디어는 기기에서 직접 생성됩니다.
+Picture	그림
+Picture Format	그림 서식
+Picture Styles	그림 스타일
+Picture from File…	파일에서 그림…
+Picture or texture fill	그림 또는 질감 채우기
+Picture\nStyles	그림\n스타일
+Pictures	그림
+Pie	원형
+Pin	고정
+Placeholder colour	개체 틀 색
+Plan\nBuild\nLaunch	계획\n구축\n출시
+Plaque	배지
+Play	재생
+Play Across Slides	슬라이드 간 계속 재생
+Play Full Screen	전체 화면 재생
+Play Narrations	설명 재생
+Play from Current Slide	현재 슬라이드부터 재생
+Play from Start	처음부터 재생
+Play from Start (F5)	처음부터 재생 (F5)
+Play from\nCurrent Slide	현재 슬라이드\n부터 재생
+Play from\nStart	처음부터\n재생
+Play/Pause	재생/일시 중지
+Playback	재생
+Plus	더하기
+Plus In	십자 안으로
+Plus Out	십자 밖으로
+Plus Sign	덧셈 기호
+Portrait (9:16)	세로 방향 (9:16)
+Português	Português
+Position	위치
+Position Objects	개체 위치
+Position and Size	위치 및 크기
+Post	게시
+Poster Frame	포스터 프레임
+PowerPoint Presentation (.pptx)	PowerPoint 프레젠테이션 (.pptx)
+Preferences	환경 설정
+Preferences…	환경 설정…
+Presentation	프레젠테이션
+Presentations	프레젠테이션
+Presentations and slide shows, rebuilt from scratch in pure Rust.	순수 Rust로 처음부터 새로 구축한 프레젠테이션 및 슬라이드 쇼 도구입니다.
+Presented by a speaker (full screen)	발표자 진행 (전체 화면)
+Presenter View	발표자 도구
+Presenter View — DeckCraft	발표자 도구 — DeckCraft
+Presenter\nView	발표자\n도구
+Preset gradients	미리 설정된 그라데이션
+Prestige	프레스티지
+Preview	미리 보기
+Previous Slide	이전 슬라이드
+Print layout:	인쇄 모양:
+Properties	속성
+Pulse	진동
+Punctuation	문장 부호
+Purple	보라
+Push	밀어내기
+Pyramid	피라미드형
+Quick Styles	빠른 스타일
+Quick\nStyles	빠른\n스타일
+Radar	방사형
+Radial	방사형
+Random	임의 효과
+Random Bars	임의의 줄무늬
+Reading View	읽기용 보기
+Reading\nView	읽기용\n보기
+Real name	성명
+Recent	최근 항목
+Record	녹화
+Recording narration needs audio capture (coming soon)	설명 녹음에는 오디오 캡처가 필요합니다 (지원 예정)
+Recovered Presentations	복구된 프레젠테이션
+Recovered {} from the last session	이전 세션에서 {} 복구됨
+Rectangle	직사각형
+Rectangle: Diagonal Corners Rounded	직사각형: 대각선 방향의 두 모서리가 둥근형
+Rectangle: Diagonal Corners Snipped	직사각형: 대각선 방향의 두 모서리가 잘린형
+Rectangle: Rounded Corners	직사각형: 모서리가 둥근형
+Rectangle: Single Corner Rounded	직사각형: 한쪽 모서리가 둥근형
+Rectangle: Single Corner Snipped	직사각형: 한쪽 모서리가 잘린형
+Rectangle: Top Corners One Rounded and One Snipped	직사각형: 위쪽 한 모서리는 둥글고 다른 모서리는 잘린형
+Rectangle: Top Corners Rounded	직사각형: 위쪽 두 모서리가 둥근형
+Rectangle: Top Corners Snipped	직사각형: 위쪽 두 모서리가 잘린형
+Rectangles	사각형
+Rectangular	사각형
+Red	빨강
+Red Pen	빨간색 펜
+Redo	다시 실행
+Redo (⌘Y)	다시 실행 (⌘Y)
+Reflected Rounded Rectangle	반사 효과가 있는 모서리가 둥근 직사각형
+Reflection	반사
+Regroup	다시 그룹화
+Regular Pentagon	정오각형
+Rehearse Timings	예행 연습
+Rehearse\nTimings	예행\n연습
+Remove	제거
+Remove All Animations	모든 애니메이션 제거
+Remove All Sections	모든 구역 제거
+Remove Animation	애니메이션 제거
+Remove Background	배경 제거
+Remove Background (coming soon)	배경 제거 (지원 예정)
+Remove Section	구역 제거
+Remove Section & Slides	구역 및 슬라이드 제거
+Remove stop	중지점 제거
+Remove\nBackground	배경\n제거
+Rename	이름 바꾸기
+Rename Layout	레이아웃 이름 바꾸기
+Rename Section	구역 이름 바꾸기
+Rename Section…	구역 이름 바꾸기…
+Rename Slide	슬라이드 이름 바꾸기
+Rename…	이름 바꾸기…
+Render Slide	슬라이드 렌더링
+Reopen	다시 열기
+Reorder Animation	애니메이션 순서 변경
+Reorder Objects	개체 순서 변경
+Replace straight quotes with smart quotes	직선 따옴표를 둥근 따옴표로 자동 변경
+Reply	답장
+Reply…	답장…
+Reset	원래대로
+Reset Background	배경 원래대로
+Reset Crop	자르기 원래대로
+Reset Effects	효과 원래대로
+Reset Picture	그림 원래대로
+Reset Slide	슬라이드 원래대로
+Reset Slide Background	슬라이드 배경 원래대로
+Resize shape to fit text	텍스트에 맞춰 도형 크기 조정
+Resolve	해결됨으로 표시
+Resolve Thread	스레드 해결
+Return	돌아가기
+Reveal	드러내기
+Reverse the order	역순으로
+Revert	되돌리기
+Review	검토
+Rewind after Playing	재생 후 되감기
+Ribbon Tab	리본 탭
+Ribbon: Tilted Down	리본: 아래로 기울어짐
+Ribbon: Tilted Up	리본: 위로 기울어짐
+Right	오른쪽
+Right Brace	오른쪽 중괄호
+Right Bracket	오른쪽 대괄호
+Right Triangle	직각 삼각형
+Right-to-Left Text Direction	오른쪽에서 왼쪽으로 텍스트 방향
+Ring	고리
+Ripple	물결
+Rise Up	떠오르기
+Rotate	회전
+Rotate Left 90°	왼쪽으로 90° 회전
+Rotate Right 90°	오른쪽으로 90° 회전
+Rotate all text 270°	모든 텍스트 270° 회전
+Rotate all text 90°	모든 텍스트 90° 회전
+Rotate with shape	도형과 함께 텍스트 회전
+Rotation	회전
+Round Dot	원형 점선
+Rounded Diagonal Corner	대각선 모서리가 둥근 사각형
+Ruler	눈금자
+Saturation	채도
+Saturation {}%	채도 {}%
+Save	저장
+Save (⌘S)	저장 (⌘S)
+Save As…	다른 이름으로 저장…
+Save AutoRecover Information	자동 복구 정보 저장
+Save as Template…	템플릿으로 저장…
+Save to Data	데이터로 저장
+Saved	저장됨
+Saved {path}	저장됨: {path}
+Scatter	분산형
+ScreenTip:	화면 설명:
+Screenshot	스크린샷
+Screenshot (not available yet)	스크린샷 (지원 예정)
+Scroll: Horizontal	두루마리: 가로
+Scroll: Vertical	두루마리: 세로
+Search commands (⇧⌘P)	명령 검색 (⇧⌘P)
+Search commands…	명령 검색…
+Section	구역
+Seek	탐색
+Select	선택
+Select All	모두 선택
+Select All Text	모든 텍스트 선택
+Select Cells	셀 선택
+Select Objects	개체 선택
+Select Paragraph	단락 선택
+Select Slides	슬라이드 선택
+Select Text	텍스트 선택
+Select Word	단어 선택
+Select a chart first.	먼저 차트를 선택하세요.
+Select a shape to format it.	서식을 지정할 도형을 선택하세요.
+Select an object on the slide and add an animation from the Animations tab.	슬라이드에서 개체를 선택한 뒤 [애니메이션] 탭에서 애니메이션을 추가하세요.
+Selection	선택
+Selection Pane	선택 창
+Selection Pane…	선택 창…
+Selection\nPane	선택\n창
+Send Backward	뒤로 보내기
+Send to Back	맨 뒤로 보내기
+Send\nBackward	뒤로\n보내기
+Sentence case.	문장 첫 글자만 대문자.
+Set Text	텍스트 설정
+Set Up Show…	슬라이드 쇼 설정…
+Set Up Slide Show	슬라이드 쇼 설정
+Set Up Slide Show…	슬라이드 쇼 설정…
+Set Up\nSlide Show	슬라이드 쇼\n설정
+Set as Default Shape	기본 도형으로 설정
+Shading	음영
+Shadow	그림자
+Shape	도형
+Shape Effects	도형 효과
+Shape Fill	도형 채우기
+Shape Format	도형 서식
+Shape Gallery	도형 갤러리
+Shape Outline	도형 윤곽선
+Shape Styles	도형 스타일
+Shape {}	도형 {}
+Shape\nStyles	도형\n스타일
+Shapes	도형
+Shift+	Shift+
+Shift+F9	Shift+F9
+Show	표시
+Show All	모두 표시
+Show Comments	메모 표시
+Show Media Controls	미디어 컨트롤 표시
+Show Slide	슬라이드 표시
+Show smart guides	스마트 안내선 표시
+Show type	쇼 형식
+Show without animation	애니메이션 없이 보기
+Show without narration	설명 없이 보기
+Show/Hide	표시/숨기기
+Show\nComments	메모\n표시
+Shred	조각내기
+Shrink & Turn	축소 및 회전
+Shrink text on overflow	넘칠 때 텍스트 크기 축소
+Simple Frame, White	단순 액자, 흰색
+Sink Down	가라앉기
+Size	크기
+Size & Properties	크기 및 속성
+Slide Master	슬라이드 마스터
+Slide Number	슬라이드 번호
+Slide Show	슬라이드 쇼
+Slide Size	슬라이드 크기
+Slide Sorter	슬라이드 여러 장 보기
+Slide number	슬라이드 번호
+Slide timings recorded.	슬라이드 진행 시간이 기록되었습니다.
+Slide {:02}:{:04.1}   Total {:02}:{:02}	슬라이드 {:02}:{:04.1}   전체 {:02}:{:02}
+Slide {} of {}	슬라이드 {} / {}
+Slide {}: {}{}	슬라이드 {}: {}{}
+Slide {}: “{w}”	슬라이드 {}: “{w}”
+Slide\nMaster	슬라이드\n마스터
+Slide\nNumber	슬라이드\n번호
+Slide\nSize	슬라이드\n크기
+Slide\nSorter	여러 장\n보기
+Slides (e.g. 1,3,5):	슬라이드 번호 (예: 1,3,5):
+Slides from Outline	개요에서 슬라이드 가져오기
+Slides from Outline…	개요에서 슬라이드 가져오기…
+Slides sized for:	슬라이드 크기 기준:
+SmartArt	SmartArt
+Smile	미소
+Smiley Face	웃는 얼굴
+Smoothly	부드럽게
+Smoothly Left	부드럽게 왼쪽으로
+Smoothly Right	부드럽게 오른쪽으로
+Snap objects to grid	개체를 눈금에 맞춤
+Soft Edge Rectangle	부드러운 가장자리 직사각형
+Soft Edges	부드러운 가장자리
+Solid	실선
+Solid fill	단색 채우기
+Solid line	실선
+Sort	정렬
+Source on GitHub	GitHub 소스 코드
+Space	Space
+Spacing after (pt):	단락 뒤 간격 (pt):
+Spacing before (pt):	단락 앞 간격 (pt):
+Special — hanging (in):	특수 — 내어쓰기 (인치):
+Speech	말풍선
+Speech Bubble: Oval	말풍선: 타원형
+Speech Bubble: Rectangle	말풍선: 직사각형
+Speech Bubble: Rectangle with Corners Rounded	말풍선: 모서리가 둥근 직사각형
+Spelling	맞춤법 검사
+Spin	회전
+Spinner	스피너 회전
+Split	나누기
+Split Cells	셀 분할
+Split\nCells	셀\n분할
+Square	정사각형
+Square (1:1)	정사각형 (1:1)
+Square Dot	사각 점선
+Stacked	쌓기
+Stacked Area	누적 영역형
+Stacked Bar	누적 가로 막대형
+Stacked Column	누적 세로 막대형
+Stacked Line	누적 꺾은선형
+Standard (4:3)	표준 (4:3)
+Standard Colors	표준 색
+Star	별
+Star: 10 Points	별: 10각
+Star: 12 Points	별: 12각
+Star: 16 Points	별: 16각
+Star: 24 Points	별: 24각
+Star: 32 Points	별: 32각
+Star: 4 Points	별: 4각
+Star: 5 Points	별: 5각
+Star: 6 Points	별: 6각
+Star: 7 Points	별: 7각
+Star: 8 Points	별: 8각
+Stars and Banners	별 및 현수막
+Start After Previous	이전 효과 다음에 시작
+Start Automatically	자동 실행
+Start On Click	클릭할 때 시작
+Start With Previous	이전 효과와 함께 시작
+Start a conversation	대화를 시작하세요
+Start time (s):	시작 시간 (초):
+Start:	시작:
+Stealth end	스텔스 화살표 끝
+Stock	주식형
+Stop	중지
+Stop Editing Text	텍스트 편집 종료
+Strikethrough	취소선
+Strips	조각 무늬
+Style {i}	스타일 {i}
+Subscript	아래 첨자
+Subtle	은은한 효과
+Sun	해
+Sunburst	선버스트
+Superscript	위 첨자
+Surface	표면형
+Switch	스위치
+Swivel	회전
+Symbol	기호
+System language	시스템 언어
+Tab	Tab
+Table	표
+Table Design	표 디자인
+Table Style Options	표 스타일 옵션
+Table Styles	표 스타일
+Table…	표…
+Task Pane	작업창
+Teardrop	물방울
+Teeter	시소
+Text	텍스트
+Text Box	텍스트 상자
+Text Box Margins	텍스트 상자 여백
+Text Direction	텍스트 방향
+Text Effects	텍스트 효과
+Text Fill	텍스트 채우기
+Text Highlight Color	텍스트 강조 색
+Text Options	텍스트 옵션
+Text Outline	텍스트 윤곽선
+Text Shadow	텍스트 그림자
+Text/Background - Dark 1	텍스트/배경 - 어둡게 1
+Text/Background - Dark 2	텍스트/배경 - 어둡게 2
+Text/Background - Light 1	텍스트/배경 - 밝게 1
+Text/Background - Light 2	텍스트/배경 - 밝게 2
+Text\nBox	텍스트\n상자
+The spelling check is complete. No issues found.	맞춤법 검사를 완료했습니다. 발견된 오류가 없습니다.
+Theme Colors	테마 색
+Theme Gallery	테마 갤러리
+Themes	테마
+Thesaurus	유의어 사전
+Thesaurus (coming soon)	유의어 사전 (지원 예정)
+This Document	이 문서
+Thought	생각 풍선
+Thought Bubble: Cloud	생각 풍선: 구름형
+Through Black	검은색을 거쳐
+Tight	좁게
+Timing	진행 시간
+Top	위쪽
+Total Row	요약 행
+Transition	전환
+Transition Gallery	전환 갤러리
+Transitions	전환
+Translate	번역
+Translation needs a language model (not bundled)	번역 기능에는 언어 모델이 필요합니다 (기본 미포함)
+Transparency	투명도
+Trapezoid	사다리꼴
+Treemap	트리맵
+Triangle	삼각형
+Trigger	트리거
+Trim	자르기
+Trim Media	미디어 자르기
+Turns	회전
+Type	종류
+Type Text	텍스트 입력
+Type an equation in linear form (e.g. a^2+b^2=c^2, x=(-b±√(b^2-4ac))/2a).	선형 형식으로 수식을 입력하세요 (예: a^2+b^2=c^2, x=(-b±√(b^2-4ac))/2a).
+Uncover	나타내기(밀어내기)
+Underline	밑줄
+Undo	실행 취소
+Undo (⌘Z)	실행 취소 (⌘Z)
+Ungroup	그룹 해제
+Up	위로
+Use Timings	진행 시간 사용
+Use timings, if present	기록된 진행 시간 사용(있는 경우)
+Username	사용자 이름
+Version	버전
+Version {}	버전 {}
+Vert In	세로 안으로
+Vert Out	세로 밖으로
+Vertical	세로
+Vertical alignment	세로 맞춤
+Very Loose	매우 넓게
+Very Tight	매우 좁게
+Video	비디오
+Video from File…	파일에서 비디오…
+View	보기
+Volume	볼륨
+Vortex	소용돌이
+Waterfall	폭포형
+Wave	물결
+Web Page or File	웹 페이지 또는 파일
+Wedge	쐐기
+Weight	두께
+Wheel	바퀴
+Widescreen (13.333x7.5 in)	와이드스크린 (13.333×7.5 인치)
+Widescreen (16:9)	와이드스크린 (16:9)
+Width	너비
+Width (in):	너비 (인치):
+Width:	너비:
+Width: 	너비: 
+Wind	바람
+Window	창
+Wipe	닦아내기
+With Previous	이전 효과와 함께
+WordArt	WordArt
+WordArt style {}	WordArt 스타일 {}
+Words	단어 단위
+Wrap Text in Shape	도형에서 텍스트 줄 바꿈
+Wrap text in shape	도형에서 텍스트 줄 바꿈
+Yellow	노랑
+Your changes will be lost if you don't save them.	저장하지 않으면 변경 내용이 손실됩니다.
+Your name (comments):	작성자 이름 (메모):
+Zoom	확대/축소
+Zoom In	확대
+Zoom Out	축소
+Zoom…	확대/축소…
+a) b) c)	a) b) c)
+a. b. c.	a. b. c.
+dropped file	드롭된 파일
+i. ii. iii.	i. ii. iii.
+no presentation open	열린 프레젠테이션 없음
+no slides	슬라이드 없음
+no text insertion point	텍스트 삽입 지점 없음
+nothing selected	선택된 개체 없음
+nothing to redo	다시 실행할 작업 없음
+nothing to undo	실행 취소할 작업 없음
+select text or a shape	텍스트 또는 도형을 선택하세요
+select two or more objects	두 개 이상의 개체를 선택하세요
+size (pt)	크기 (pt)
+tOGGLE cASE	대/소문자 반전
+unknown interface language	알 수 없는 인터페이스 언어
+{ch}  Bullet	{ch}  글머리 기호
+{f} (Body)	{f} (본문)
+{f} (Headings)	{f} (제목)
+{name}: DeckCraft can't open this kind of file	{name}: DeckCraft에서 열 수 없는 파일 형식입니다
+{n} Column{}	{n}단{}
+{r} pt	{r} pt
+{r} pt glow	네온 {r} pt
+{w} pt	{w} pt
+{} ({} slides)	{} ({}개 슬라이드)
+{} Slide Master	{} 슬라이드 마스터
+{} contributors · {} commits	기여자 {}명 · 커밋 {}건
+{} presentations	{}개의 프레젠테이션
+{}x{} Table	{}×{} 표
+“{}” is not available yet.	“{}” 기능은 아직 지원되지 않습니다.
+−Bin	−구간
+▶ Play All	▶ 모두 재생
+◀ Previous	◀ 이전
+✏ on	✏ 켜짐
+Arrow: Circular	화살표: 원형
+Arrow: Circular Counter-clockwise	화살표: 반시계 방향 원형
+Arrow: Circular Two-headed	화살표: 양방향 원형
+Arrow: Curved Down	화살표: 아래로 휜 형태
+Arrow: Curved Left	화살표: 왼쪽으로 휜 형태
+Arrow: Curved Right	화살표: 오른쪽으로 휜 형태
+Arrow: Curved Up	화살표: 위로 휜 형태
+Arrow: Swoosh	화살표: 급회전
+Artistic Effects	꾸미기 효과
+AutoCorrect Options	자동 고침 옵션
+AutoCorrect Options…	자동 고침 옵션…
+Bean	콩 모양
+Black and White: 25%	흑백: 25%
+Black and White: 50%	흑백: 50%
+Black and White: 75%	흑백: 75%
+Borders	테두리
+Bounce Left	왼쪽으로 통통 튀기
+Bounce Right	오른쪽으로 통통 튀기
+Browse for Themes…	테마 찾아보기…
+Callout: Bent Line	설명선: 꺾인 선
+Callout: Bent Line with Accent Bar	설명선: 강조 표시줄이 있는 꺾인 선
+Callout: Bent Line with Border and Accent Bar	설명선: 테두리와 강조 표시줄이 있는 꺾인 선
+Callout: Bent Line with No Border	설명선: 테두리 없는 꺾인 선
+Callout: Double Bent Line	설명선: 이중 꺾인 선
+Callout: Double Bent Line with Accent Bar	설명선: 강조 표시줄이 있는 이중 꺾인 선
+Callout: Double Bent Line with Border and Accent Bar	설명선: 테두리와 강조 표시줄이 있는 이중 꺾인 선
+Callout: Double Bent Line with No Border	설명선: 테두리 없는 이중 꺾인 선
+Callout: Left-Right Arrow	설명선: 좌우 화살표
+Callout: Line with Accent Bar	설명선: 강조 표시줄이 있는 선
+Callout: Line with Border and Accent Bar	설명선: 테두리와 강조 표시줄이 있는 선
+Callout: Line with No Border	설명선: 테두리 없는 선
+Callout: Quad Arrow	설명선: 사방 화살표
+Callout: Up-Down Arrow	설명선: 상하 화살표
+Cell Margins	셀 여백
+Change Colors	색 변경
+Change Layout	레이아웃 변경
+Change Picture…	그림 변경…
+Change Spelling	맞춤법 변경
+Chart Marker: Cross Lines	차트 표식: X자 선
+Chart Marker: Plus Lines	차트 표식: 십자 선
+Chart Marker: Star Lines	차트 표식: 별 모양 선
+Commit Composition	조합 입력 확정
+Compare	비교
+Compare…	비교…
+Compose Text	텍스트 조합 입력
+Compress Pictures	그림 압축
+Convert to Shapes	도형으로 변환
+Convert to SmartArt	SmartArt로 변환
+Convert to Text	텍스트로 변환
+Corner Tabs: Quarter Circles	모서리 탭: 사분원
+Corner Tabs: Squares	모서리 탭: 정사각형
+Corner Tabs: Triangles	모서리 탭: 삼각형
+Flowchart: Offline Storage	순서도: 오프라인 저장소
+Gear: 6 Teeth	톱니바퀴: 6톱니
+Gear: 9 Teeth	톱니바퀴: 9톱니
+Line: Rising	선: 상승선
+Quarter Wedge	사분원 쐐기
+Ribbon: Curved and Tilted Down	리본: 아래로 기울어진 곡선
+Ribbon: Curved and Tilted Up	리본: 위로 기울어진 곡선
+Ribbon: Left-Right Fold	리본: 좌우 접기
+Trapezoid: Uneven Sides	사다리꼴: 비대칭 변
+Unlock	잠금 해제
+Print	인쇄
+Info	정보
+Print…	인쇄…
+Counterclockwise	반시계 방향
+Crescent Moon	초승달
+Curved Square	곡선 정사각형
+Customize Quick Access Toolbar	빠른 실행 도구 모음 사용자 지정
+Decaying Wave	감쇠 파동
+Delete Guide	안내선 삭제
+Delete Point	점 삭제
+Delete Repeated Word	반복된 단어 삭제
+Demote	수준 낮추기
+Diagonal Down Right	오른쪽 아래 대각선
+Diagonal Up Right	오른쪽 위 대각선
+Diamonds From Bottom	아래에서 다이아몬드
+Diamonds From Left	왼쪽에서 다이아몬드
+Diamonds From Right	오른쪽에서 다이아몬드
+Diamonds From Top	위에서 다이아몬드
+Do not check spelling or grammar	맞춤법 또는 문법 검사 안 함
+dictionary	사전
+Double Left	왼쪽 이중
+Double Right	오른쪽 이중
+Draw Table	표 그리기
+Edit Photo Album…	사진 앨범 편집…
+Edit Points	점 편집
+Edit SmartArt Text	SmartArt 텍스트 편집
+End Review	검토 끝내기
+Enter a zoom percent	확대/축소 비율(%) 입력
+Find	찾기
+Fonts in Presentation	프레젠테이션의 글꼴
+Font…	글꼴…
+Football	럭비공
+From Bottom-Left	왼쪽 아래에서
+From Bottom-Right	오른쪽 아래에서
+From Top-Left	왼쪽 위에서
+From Top-Right	오른쪽 위에서
+Grid and Guides	눈금 및 안내선
+Grid Options…	눈금 옵션…
+Handout Placeholders	유인물 개체 틀
+Heartbeat	심장 박동
+Hexagons From Bottom	아래에서 육각형
+Hexagons From Left	왼쪽에서 육각형
+Hexagons From Right	오른쪽에서 육각형
+Hexagons From Top	위에서 육각형
+Horizontal Figure 8	가로 8자 모양
+Horizontal In	가로 안쪽으로
+Horizontal Out	가로 바깥쪽으로
+Icon Gallery	아이콘 갤러리
+Ignore All	모두 무시
+In with Bounce	안쪽으로 통통 튀기
+Ink to Shape: turn drawn lines, rectangles, ovals and triangles into shapes	잉크를 도형으로: 그린 선, 직사각형, 타원, 삼각형을 도형으로 변환
+Insert Picture in SmartArt	SmartArt에 그림 삽입
+Insert Picture in SmartArt…	SmartArt에 그림 삽입…
+Insert Synonym	유의어 삽입
+Layout Placeholders	레이아웃 개체 틀
+Loop de Loop	연속 회전 고리
+Move Guide	안내선 이동
+Move Handle	조절점 이동
+Move Point	점 이동
+Neutron	중성자 궤도
+New	새로 만들기
+New Window	새 창
+Next Comment	다음 메모
+No comments.	메모가 없습니다.
+No icons match.	일치하는 아이콘이 없습니다.
+No Recolor	다시 칠하기 없음
+Notes Placeholders	슬라이드 노트 개체 틀
+Office Theme	기본 오피스 테마
+Open	열기
+Out with Bounce	바깥쪽으로 통통 튀기
+Particles In	입자 모이기
+Particles Out	입자 흩어지기
+Paste Special	선택하여 붙여넣기
+Paste Special…	선택하여 붙여넣기…
+Peanut	땅콩 모양
+Percent:	비율(%):
+Photo Album…	사진 앨범…
+Pick a design for this slide. Ideas are generated on your device.	이 슬라이드의 디자인을 선택하세요. 디자인 아이디어는 기기에서 직접 생성됩니다.
+Picture Border	그림 테두리
+Picture Style Gallery	그림 스타일 갤러리
+Point Type	점 유형
+Points	점
+Preserve	보존
+Preview Animations	애니메이션 미리 보기
+Previous Comment	이전 메모
+Promote	수준 높이기
+Quick Access Toolbar	빠른 실행 도구 모음
+Recolor	다시 칠하기
+Recolor Gallery	다시 칠하기 갤러리
+Remove from Quick Access Toolbar	빠른 실행 도구 모음에서 제거
+Remove Shape	도형 제거
+Repeated word	반복된 단어
+Replace	바꾸기
+Replace Fonts	글꼴 바꾸기
+Replace…	바꾸기…
+Rescan Installed Fonts	설치된 글꼴 다시 검색
+Reset to Defaults	기본값으로 복원
+Reuse Slides…	슬라이드 다시 사용…
+Revisions	수정 내역
+Right-click any ribbon button to add it.	리본 단추를 마우스 오른쪽 단추로 클릭하여 추가하세요.
+S Curve 1	S자 곡선 1
+S Curve 2	S자 곡선 2
+Sepia	세피아
+Set Transparent Color	투명한 색 설정
+Set Zoom	확대/축소 설정
+Sine Wave	사인파
+Single Left	왼쪽 단일
+Single Right	오른쪽 단일
+Size and Position…	크기 및 위치…
+SmartArt Styles	SmartArt 스타일
+Smooth Corners	부드러운 모서리
+Smoothly From Left	왼쪽에서 부드럽게
+Smoothly From Right	오른쪽에서 부드럽게
+Sound	소리
+Spelling Dictionary	맞춤법 사전
+Spelling is checked for languages marked (dictionary).	(사전)으로 표시된 언어에 대해 맞춤법을 검사합니다.
+Spiral Left	왼쪽 나선형
+Spiral Right	오른쪽 나선형
+Spring	용수철
+Stairs Down	계단 내려가기
+Start from Beginning	처음부터 시작
+Starter Templates	시작 템플릿
+Strips In	안쪽으로 줄무늬
+Strips Out	바깥쪽으로 줄무늬
+Swoosh	급회전
+Table Eraser	표 지우개
+Tabs…	탭…
+Text Pane	텍스트 창
+Text Transform	텍스트 변환
+Text Transparency	텍스트 투명도
+Themes and presentations	테마 및 프레젠테이션
+Through Black From Left	검은 화면을 거쳐 왼쪽에서
+Through Black From Right	검은 화면을 거쳐 오른쪽에서
+Variant Gallery	변형 갤러리
+Variants	변형
+Vertical Figure 8	세로 8자 모양
+Vertical In	세로 안쪽으로
+Vertical Out	세로 바깥쪽으로
+Washout	희미하게
+Zigzag	지그재그
+Zoom and Rotate	확대/축소 및 회전
+Zoom to	확대/축소 비율
+■ Stop	■ 정지
+circle	원
+diamond	다이아몬드
+plus	십자(+)
+▶ Play From	▶ 선택한 위치부터 재생
+Pattern	패턴
+List Slides to Reuse	다시 사용할 슬라이드 목록
+Delete Segment	선분 삭제
+Segment Type	선분 유형
+Open Path	경로 열기
+Close Path	경로 닫기
+Reject Revision	수정 내용 거부
+Duration	재생 시간
+Delay	지연 시간
+Delete Surrounding Text	주변 텍스트 삭제
+{} options	{} 옵션
+Missing slide title	슬라이드 제목 누락
+Missing alternative text	대체 텍스트 누락
+Hard-to-read text contrast ({}:1)	텍스트 대비가 낮아 읽기 어려움 ({}:1)
+Apply to:	적용 대상:
+Selected text	선택한 텍스트
+Whole presentation	전체 프레젠테이션
+Measurement units:	측정 단위:
+Inches	인치(in)
+Centimeters	센티미터(cm)
+Select Slide Range	슬라이드 범위 선택
+Language for All Text	모든 텍스트의 언어
+Mark all text in the presentation as:	프레젠테이션의 모든 텍스트 언어 표시:
+Check for Updates…	업데이트 확인…

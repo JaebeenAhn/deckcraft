@@ -3,8 +3,8 @@
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-25 · **Change:** minor (Polish UI catalog; previous: minor, opt-in native LXGW WenKai Lite fallback and interface CJK tests; local implementation only, managed validation pending; previous: minor, IME composition underlined in table cells; previous: minor, IME composition and CJK interface text, #101; previous: major, created) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-21 · **Change:** minor (one proofing language for the whole presentation; previous: minor, IME composition underlined in table cells; previous: minor, IME composition and CJK interface text, #101; previous: major, created) · **Target:** Microsoft PowerPoint for Mac 16.113 (Microsoft 365)
 
-DeckCraft's interface supports English, Ukrainian and Polish through `crates/ui-egui/src/i18n/uk.tsv`
-and `crates/ui-egui/src/i18n/pl.tsv`.
+DeckCraft's interface supports English, Ukrainian, Polish and Korean through `crates/ui-egui/src/i18n/uk.tsv`,
+`crates/ui-egui/src/i18n/pl.tsv` and `crates/ui-egui/src/i18n/ko.tsv`.
 Preferences offers the system language or an explicit choice; desktop choices persist across
 restarts. Menus, ribbon, command palette, panels, dialogs and presenter controls are translated,
 with English fallback. Presentation content, custom placeholder prompts and command IDs keep
@@ -40,7 +40,7 @@ support partly there), **55–90 h** to parity plus native-speaker review.
 | Indonesian | id | 0 (0%) | no | full (Latin) | no | none | yes | 3–5 |
 | Japanese | ja | 0 (0%) | no | renders with system or craft-fonts Japanese faces; IME composition (#101); vertical text is rotated, not laid out vertically | no | none | yes | 4–7 |
 | German | de | 0 (0%) | no | full (Latin) | no | none | yes | 3–5 |
-| Korean | ko | 0 (0%) | no | system Hangul fonts, in the interface too; IME composition (#101) | no | none | yes | 4–7 |
+| Korean | ko | UI catalog (1,486 entries); coverage checked by tests | UI captions; diagnostics retain original wording | system Hangul fonts, in the interface too; IME composition (#101) | yes | available; English fallback | yes | — |
 | Vietnamese | vi | 0 (0%) | no | stacked diacritics through HarfRust | no | none | **no** (Windows only) | 3–5 |
 
 Other languages shipped: **2 (Ukrainian, Polish)**. The Polish catalog (`i18n/pl.tsv`) has the same 1,232 keys as the Ukrainian one, its own integer-count forms, and no second native-speaker review yet. PowerPoint for Mac ships 16 more

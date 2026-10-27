@@ -14,10 +14,11 @@ pub enum Language {
     En,
     Uk,
     Pl,
+    Ko,
 }
 
 impl Language {
-    pub const ALL: [Self; 4] = [Self::System, Self::En, Self::Uk, Self::Pl];
+    pub const ALL: [Self; 5] = [Self::System, Self::En, Self::Uk, Self::Pl, Self::Ko];
 
     /// The `app.language` value for this choice.
     pub fn code(self) -> &'static str {
@@ -26,6 +27,7 @@ impl Language {
             Self::En => "en",
             Self::Uk => "uk",
             Self::Pl => "pl",
+            Self::Ko => "ko",
         }
     }
 
@@ -35,6 +37,7 @@ impl Language {
             Self::En => "English",
             Self::Uk => "Українська",
             Self::Pl => "Polski",
+            Self::Ko => "한국어",
         }
     }
 
@@ -44,6 +47,8 @@ impl Language {
             Self::Uk
         } else if language.eq_ignore_ascii_case("pl") {
             Self::Pl
+        } else if language.eq_ignore_ascii_case("ko") {
+            Self::Ko
         } else {
             Self::En
         }
@@ -68,8 +73,10 @@ pub fn set_current(language: Language) {
 
 const CATALOG: &str = include_str!("i18n/uk.tsv");
 const PL_CATALOG: &str = include_str!("i18n/pl.tsv");
+const KO_CATALOG: &str = include_str!("i18n/ko.tsv");
 static UK: OnceLock<HashMap<String, String>> = OnceLock::new();
 static PL: OnceLock<HashMap<String, String>> = OnceLock::new();
+static KO: OnceLock<HashMap<String, String>> = OnceLock::new();
 
 fn parse(text: &str) -> HashMap<String, String> {
     text.lines()
@@ -87,11 +94,16 @@ fn polish() -> &'static HashMap<String, String> {
     PL.get_or_init(|| parse(PL_CATALOG))
 }
 
+fn korean() -> &'static HashMap<String, String> {
+    KO.get_or_init(|| parse(KO_CATALOG))
+}
+
 /// The catalog of the language being drawn; `None` for English.
 fn active() -> Option<&'static HashMap<String, String>> {
     match CURRENT.get() {
         Language::Uk => Some(catalog()),
         Language::Pl => Some(polish()),
+        Language::Ko => Some(korean()),
         Language::System | Language::En => None,
     }
 }
@@ -146,6 +158,11 @@ pub fn count(n: usize, english: &str, ukrainian: [&str; 3], polish: [&str; 3]) -
         Language::Pl if n == 1 => polish[0],
         Language::Pl if few => polish[1],
         Language::Pl => polish[2],
+        Language::Ko => match english {
+            "slide" | "slides" => return format!("슬라이드 {n}개"),
+            "unsaved presentation" | "unsaved presentations" => return format!("저장되지 않은 프레젠테이션 {n}개"),
+            _ => return format!("{n}개"),
+        },
         Language::System | Language::En => english,
     };
     format!("{n} {word}")
@@ -216,10 +233,14 @@ mod tests {
         assert!(missing.is_empty(), "missing effect options: {missing:?}");
         let missing: Vec<_> = option_labels.iter().filter(|label| !polish().contains_key(*label)).collect();
         assert!(missing.is_empty(), "missing Polish effect options: {missing:?}");
+        let missing: Vec<_> = option_labels.iter().filter(|label| !korean().contains_key(*label)).collect();
+        assert!(missing.is_empty(), "missing Korean effect options: {missing:?}");
         let missing: Vec<_> = required.iter().filter(|key| !catalog().contains_key(**key)).collect();
         assert!(missing.is_empty(), "missing visible metadata: {missing:?}");
         let missing: Vec<_> = required.iter().filter(|key| !polish().contains_key(**key)).collect();
         assert!(missing.is_empty(), "missing visible metadata in Polish: {missing:?}");
+        let missing: Vec<_> = required.iter().filter(|key| !korean().contains_key(**key)).collect();
+        assert!(missing.is_empty(), "missing visible metadata in Korean: {missing:?}");
     }
 
     #[test]
@@ -266,6 +287,7 @@ mod tests {
                     let key: String = serde_json::from_str(&format!("\"{}\"", &tail[..end])).unwrap();
                     assert!(catalog().contains_key(&key), "missing literal translation: {key}");
                     assert!(polish().contains_key(&key), "missing Polish literal translation: {key}");
+                    assert!(korean().contains_key(&key), "missing Korean literal translation: {key}");
                     rest = &tail[end + 1..];
                 }
             }
@@ -317,7 +339,7 @@ mod tests {
     fn ukrainian_interface_preview() {
         let dir = std::env::var("DECKCRAFT_I18N_SHOTS").unwrap();
         std::fs::create_dir_all(&dir).unwrap();
-        for (code, language) in [("en", Language::En), ("uk", Language::Uk), ("pl", Language::Pl)] {
+        for (code, language) in [("en", Language::En), ("uk", Language::Uk), ("pl", Language::Pl), ("ko", Language::Ko)] {
             for (name, dialog) in [("editor", None), ("preferences", Some("preferences")), ("table", Some("table"))] {
                 let mut app = crate::SlideApp::new(deckcraft_engine::Session::new(), crate::Services::default());
                 app.run("file.new", serde_json::json!({})).unwrap();
@@ -353,7 +375,7 @@ mod tests {
 
     #[test]
     fn catalog_is_unique_complete_and_preserves_placeholders() {
-        for catalog in [CATALOG, PL_CATALOG] {
+        for catalog in [CATALOG, PL_CATALOG, KO_CATALOG] {
             let mut seen = std::collections::HashSet::new();
             for (line_no, line) in catalog.lines().enumerate() {
                 if line.is_empty() || line.starts_with('#') {
@@ -365,9 +387,11 @@ mod tests {
                 assert_eq!(placeholders(source), placeholders(text), "placeholder names/order/format: {source}");
             }
         }
-        // Polish translates exactly the keys Ukrainian does, so neither falls back to English.
+        // Polish and Korean translate exactly the keys Ukrainian does, so none falls back to English.
         let mut only_one: Vec<_> = catalog().keys().filter(|key| !polish().contains_key(*key)).collect();
         only_one.extend(polish().keys().filter(|key| !catalog().contains_key(*key)));
+        only_one.extend(catalog().keys().filter(|key| !korean().contains_key(*key)));
+        only_one.extend(korean().keys().filter(|key| !catalog().contains_key(*key)));
         assert!(only_one.is_empty(), "keys in one catalog only: {only_one:?}");
     }
 
